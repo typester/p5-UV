@@ -114,5 +114,7 @@ CODE:
     r = uv_timer_stop(timer);
     assert(0 == r);
 
+    SvREFCNT_dec((SV*)timer->data);
+
     uv_close((uv_handle_t*)timer, xs_uv_cose);
 }
