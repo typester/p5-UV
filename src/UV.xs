@@ -365,6 +365,25 @@ CODE:
 OUTPUT:
     RETVAL
 
+int
+uv_tcp_connect6(uv_tcp_t* tcp, const char* ip, int port, SV* cb)
+CODE:
+{
+    uv_connect_t* req;
+    cb_pair_t* cb_pair = (cb_pair_t*)tcp->data;
+
+    if (cb_pair->connect_cb)
+        SvREFCNT_dec(cb_pair->connect_cb);
+    cb_pair->connect_cb = SvREFCNT_inc(cb);
+
+    req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+    assert(req);
+
+    RETVAL = uv_tcp_connect6(req, tcp, uv_ip6_addr(ip, port), connect_cb);
+}
+OUTPUT:
+    RETVAL
+
 void
 uv_timer_init()
 CODE:
