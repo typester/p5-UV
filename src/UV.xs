@@ -9,7 +9,15 @@
 
 #include <uv.h>
 
-static void xs_uv_timer_cb(uv_timer_t* handle, int status) {
+static void close_cb(uv_handle_t* handle) {
+    if (NULL != handle->data) {
+        SvREFCNT_dec((SV*)handle->data);
+    }
+
+    free(handle);
+}
+
+static void timer_cb(uv_timer_t* handle, int status) {
     SV* cb;
 
     dSP;
@@ -67,9 +75,9 @@ new(char* class, double timeout, double repeat, SV* cb)
 CODE:
 {
     SV* timer_sv;
+    uv_timer_t* timer;
     HV* hv;
     HV* stash;
-    uv_timer_t* timer;
     int r;
 
     hv       = (HV*)sv_2mortal((SV*)newHV());
@@ -87,7 +95,7 @@ CODE:
 
     timer->data = (void*)SvREFCNT_inc(cb);
 
-    r = uv_timer_start(timer, xs_uv_timer_cb, (int64_t)timeout, (int64_t)repeat);
+    r = uv_timer_start(timer, timer_cb, (int64_t)timeout, (int64_t)repeat);
     assert(0 == r);
 
     sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
@@ -111,7 +119,5 @@ CODE:
     r = uv_timer_stop(timer);
     assert(0 == r);
 
-    SvREFCNT_dec((SV*)timer->data);
-
-    uv_close((uv_handle_t*)timer, xs_uv_cose);
+    uv_close((uv_handle_t*)timer, close_cb);
 }
