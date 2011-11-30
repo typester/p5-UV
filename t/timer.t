@@ -1,3 +1,5 @@
+use strict;
+use warnings;
 use Test::More;
 
 use_ok 'UV';
@@ -6,22 +8,25 @@ use_ok 'UV';
     my $one    = 0;
     my $repeat = 0;
 
-    my $one_timer = UV::timer->new(10, 0, sub {
+    my $one_timer = UV::timer_init();
+    UV::timer_start($one_timer, 10, 0, sub {
         $one++;
     });
 
-    my $repeat_timer; $repeat_timer = UV::timer->new(10, 10, sub {
+    my $repeat_timer = UV::timer_init();
+    UV::timer_start($repeat_timer, 10, 10, sub {
         $repeat++;
 
         if (5 == $repeat) {
-            undef $repeat_timer;
+            UV::timer_stop($repeat_timer);
         }
     });
 
-    my $timeout_timer; $timeout_timer = UV::timer->new(100, 0, sub {
-        undef $one_timer;
-        undef $repeat_timer;
-        undef $timeout_timer;
+    my $timeout_timer = UV::timer_init();
+    UV::timer_start($timeout_timer, 100, 0, sub {
+        UV::close($one_timer);
+        UV::close($repeat_timer);
+        UV::close($timeout_timer);
     });
 
     UV::run();

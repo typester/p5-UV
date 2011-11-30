@@ -1,0 +1,7 @@
+TYPEMAP
+uv_timer_t*     T_UV_HANDLE
+
+INPUT
+T_UV_HANDLE
+    $var = ($type)mg_find(SvRV($arg), PERL_MAGIC_ext)->mg_obj;
+
