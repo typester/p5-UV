@@ -18,6 +18,12 @@ elsif ($^O eq 'darwin') {
         OTHERLDFLAGS => '-framework CoreServices',
     }
 }
+elsif ($^O =~ /^(gnuk)?freebsd$/ || $^O eq 'netbsd' || $^O eq 'openbsd') {
+    cc_libs 'm', 'pthread';
+}
+elsif ($^O eq 'sunos' || $^O eq 'solaris') {
+    cc_libs 'm', 'socket', 'nsl', 'kstat', 'pthreads';
+}
 elsif ($^O eq 'MSWin32') {
     cc_libs 'm', 'ws2_32';
 }
