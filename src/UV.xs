@@ -41,10 +41,6 @@ static void timer_cb(uv_timer_t* handle, int status) {
     LEAVE;
 }
 
-static void xs_uv_cose(uv_handle_t* handle) {
-    free(handle);
-}
-
 MODULE=UV PACKAGE=UV
 
 PROTOTYPES: DISABLE
