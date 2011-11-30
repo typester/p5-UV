@@ -9,8 +9,6 @@
 
 #include <uv.h>
 
-#define MAX_VERSION_SLEN 4
-
 static void xs_uv_timer_cb(uv_timer_t* handle, int status) {
     SV* cb;
 
@@ -25,7 +23,6 @@ static void xs_uv_timer_cb(uv_timer_t* handle, int status) {
     assert(0 == status);
 
     cb = (SV*)handle->data;
-
 
     call_sv(cb, G_SCALAR);
 
