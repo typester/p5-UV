@@ -8,6 +8,23 @@ cc_src_paths 'src';
 cc_include_paths 'deps/libuv/include';
 cc_warnings;
 
+
+if ($^O eq 'linux') {
+    cc_libs 'm', 'rt', 'pthread';
+}
+elsif ($^O eq 'darwin') {
+    cc_libs 'm', 'pthread';
+    makemaker_args->{dynamic_lib} = {
+        OTHERLDFLAGS => '-framework CoreServices',
+    }
+}
+elsif ($^O eq 'MSWin32') {
+    cc_libs 'm', 'ws2_32';
+}
+else {
+    die "$^O is unsupported at this point\n";
+}
+
 makemaker_args->{MYEXTLIB} = 'deps/libuv/uv$(LIB_EXT)';
 
 {
