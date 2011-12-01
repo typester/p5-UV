@@ -24,7 +24,7 @@ UV::listen($tcp_server, 10, sub {
                 pass "eof ok";
             }
             else {
-                fail "not eof, something error: ", UV::last_error();
+                fail "not eof, something error: " . UV::last_error();
             }
 
             UV::close($con);
