@@ -239,6 +239,28 @@ CODE:
 OUTPUT:
     RETVAL
 
+const char*
+uv_strerror(int code)
+CODE:
+{
+    uv_err_t err;
+    err.code = code;
+    RETVAL = uv_strerror(err);
+}
+OUTPUT:
+    RETVAL
+
+const char*
+uv_err_name(int code)
+CODE:
+{
+    uv_err_t err;
+    err.code = code;
+    RETVAL = uv_err_name(err);
+}
+OUTPUT:
+    RETVAL
+
 int
 uv_is_active(uv_handle_t* handle)
 
