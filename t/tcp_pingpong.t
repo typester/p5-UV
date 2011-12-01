@@ -19,12 +19,24 @@ UV::listen($tcp_server, 10, sub {
     UV::read_start($con, sub {
         my ($nread, $buf) = @_;
 
-        is $buf, 'ping', 'ping receive ok';
+        if ($nread < 0) {
+            if (UV::EOF() == UV::last_error()) {
+                pass "eof ok";
+            }
+            else {
+                fail "not eof, something error: ", UV::last_error();
+            }
 
-        UV::write($con, 'pong', sub {
             UV::close($con);
             UV::close($tcp_server);
-        });
+        }
+        else {
+            is $buf, 'ping', 'ping receive ok';
+
+            UV::write($con, 'pong', sub {
+                pass "write callback ok";
+            });
+        }
     });
 });
 

@@ -10,6 +10,9 @@
 
 #include <uv.h>
 
+#define UV_ERRNO_CONST_GEN(val, name, s) \
+    newCONSTSUB(stash, #name, newSViv(val));
+
 typedef struct {
     SV* connection_cb;
     SV* connect_cb;
@@ -199,6 +202,12 @@ MODULE=UV PACKAGE=UV PREFIX=uv_
 
 PROTOTYPES: DISABLE
 
+BOOT:
+{
+    HV* stash = gv_stashpv("UV", 1);
+    UV_ERRNO_MAP(UV_ERRNO_CONST_GEN);
+}
+
 void
 uv_run()
 CODE:
@@ -218,31 +227,17 @@ CODE:
     ST(0) = sv;
 }
 
-void
+int
 uv_last_error()
 CODE:
 {
-    SV* sv_err;
-    HV* hv;
-    uv_err_t* e;
     uv_err_t err;
 
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    sv_err = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_err, gv_stashpv("UV::err", 1));
-
     err = uv_last_error(uv_default_loop());
-
-    e = (uv_err_t*)malloc(sizeof(uv_err_t));
-    assert(e);
-    memcpy(e, &err, sizeof(uv_err_t));
-
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)e;
-
-    ST(0) = sv_err;
+    RETVAL = err.code;
 }
+OUTPUT:
+    RETVAL
 
 int
 uv_is_active(uv_handle_t* handle)
@@ -473,20 +468,3 @@ CODE:
 OUTPUT:
     RETVAL
 
-
-MODULE=UV PACKAGE=UV::err
-
-void
-DESTROY(SV* self)
-CODE:
-{
-    MAGIC* m;
-    uv_err_t* err = NULL;
-
-    m = mg_find(SvRV(self), PERL_MAGIC_ext);
-    if (NULL != m) err = (uv_err_t*)m->mg_obj;
-    if (NULL == err) croak("This is not UV::err object\n");
-
-    free(err);
-    m->mg_obj = NULL;
-}
