@@ -727,6 +727,47 @@ CODE:
 OUTPUT:
     RETVAL
 
+void
+uv_udp_getsockname(uv_udp_t* udp)
+CODE:
+{
+    struct sockaddr_storage address;
+    struct sockaddr_in* in;
+    struct sockaddr_in6* in6;
+    char ip[INET6_ADDRSTRLEN];
+    int addrlen;
+    int r;
+    SV* sv_ip;
+    SV* sv_port;
+
+    addrlen = sizeof(address);
+    r = uv_udp_getsockname(udp, (struct sockaddr*)&address, &addrlen);
+    assert(0 == r);
+
+    switch (address.ss_family) {
+        case AF_INET:
+            in = (struct sockaddr_in*)&address;
+            uv_inet_ntop(AF_INET, &in->sin_addr, ip, INET6_ADDRSTRLEN);
+            sv_ip = sv_2mortal(newSV(0));
+            sv_setpv(sv_ip, ip);
+            sv_port = sv_2mortal(newSViv(ntohs(in->sin_port)));
+            break;
+        case AF_INET6:
+            in6 = (struct sockaddr_in6*)&address;
+            uv_inet_ntop(AF_INET6, &in6->sin6_addr, ip, INET6_ADDRSTRLEN);
+            sv_ip = sv_2mortal(newSV(0));
+            sv_setpv(sv_ip, ip);
+            sv_port = sv_2mortal(newSViv(ntohs(in6->sin6_port)));
+            break;
+        default:
+            croak("bad address family");
+    }
+
+    ST(0) = sv_ip;
+    ST(1) = sv_port;
+    XSRETURN(2);
+}
+
 int
 uv_udp_set_membership(uv_udp_t* udp, const char* multicast_addr, const char* interface_addr, int membership)
 
