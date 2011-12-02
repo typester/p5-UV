@@ -35,7 +35,34 @@ typedef struct {
     SV* connect_cb;
     SV* read_cb;
     SV* write_cb;
+    SV* shutdown_cb;
 } cb_pair_t;
+
+static void shutdown_cb(uv_shutdown_t* req, int status) {
+    uv_stream_t* stream = req->handle;
+    cb_pair_t* cb_pair = (cb_pair_t*)stream->data;
+    SV* sv_status;
+    dSP;
+
+    sv_status = sv_2mortal(newSViv(status));
+
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
+    XPUSHs(sv_status);
+    PUTBACK;
+
+    call_sv(cb_pair->shutdown_cb, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+
+    free(req);
+}
 
 static void close_cb(uv_handle_t* handle) {
     cb_pair_t* pair;
@@ -378,6 +405,27 @@ CODE:
     uv_err_t err;
     err.code = code;
     RETVAL = uv_err_name(err);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_shutdown(uv_stream_t* handle, SV* cb)
+CODE:
+{
+    uv_shutdown_t* req;
+    cb_pair_t* cb_pair;
+
+    req = (uv_shutdown_t*)malloc(sizeof(uv_shutdown_t));
+    assert(req);
+
+    cb_pair = (cb_pair_t*)handle->data;
+
+    if (cb_pair->shutdown_cb)
+        SvREFCNT_dec(cb_pair->shutdown_cb);
+    cb_pair->shutdown_cb = SvREFCNT_inc(cb);
+
+    RETVAL = uv_shutdown(req, handle, shutdown_cb);
 }
 OUTPUT:
     RETVAL
