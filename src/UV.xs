@@ -559,6 +559,90 @@ CODE:
 OUTPUT:
     RETVAL
 
+void
+uv_tcp_getsockname(uv_tcp_t* handle)
+CODE:
+{
+    int r;
+    struct sockaddr_storage address;
+    struct sockaddr_in* in;
+    struct sockaddr_in6* in6;
+    int addrlen;
+    char ip[INET6_ADDRSTRLEN];
+
+    SV* sv_ip;
+    SV* sv_port;
+
+    addrlen = sizeof(addrlen);
+    r = uv_tcp_getsockname(handle, (struct sockaddr*)&address, &addrlen);
+    assert(0 == r);
+
+    switch (address.ss_family) {
+        case AF_INET:
+            in = (struct sockaddr_in*)&address;
+            uv_inet_ntop(AF_INET, &in->sin_addr, ip, INET6_ADDRSTRLEN);
+            sv_ip = sv_2mortal(newSV(0));
+            sv_setpv(sv_ip, ip);
+            sv_port = sv_2mortal(newSViv(ntohs(in->sin_port)));
+            break;
+        case AF_INET6:
+            in6 = (struct sockaddr_in6*)&address;
+            uv_inet_ntop(AF_INET6, &in6->sin6_addr, ip, INET6_ADDRSTRLEN);
+            sv_ip = sv_2mortal(newSV(0));
+            sv_setpv(sv_ip, ip);
+            sv_port = sv_2mortal(newSViv(htons(in6->sin6_port)));
+            break;
+        default:
+            croak("bad family");
+    }
+
+    ST(0) = sv_ip;
+    ST(1) = sv_port;
+    XSRETURN(2);
+}
+
+void
+uv_tcp_getpeername(uv_tcp_t* handle)
+CODE:
+{
+    int r;
+    struct sockaddr_storage address;
+    struct sockaddr_in* in;
+    struct sockaddr_in6* in6;
+    int addrlen;
+    char ip[INET6_ADDRSTRLEN];
+
+    SV* sv_ip;
+    SV* sv_port;
+
+    addrlen = sizeof(addrlen);
+    r = uv_tcp_getpeername(handle, (struct sockaddr*)&address, &addrlen);
+    assert(0 == r);
+
+    switch (address.ss_family) {
+        case AF_INET:
+            in = (struct sockaddr_in*)&address;
+            uv_inet_ntop(AF_INET, &in->sin_addr, ip, INET6_ADDRSTRLEN);
+            sv_ip = sv_2mortal(newSV(0));
+            sv_setpv(sv_ip, ip);
+            sv_port = sv_2mortal(newSViv(ntohs(in->sin_port)));
+            break;
+        case AF_INET6:
+            in6 = (struct sockaddr_in6*)&address;
+            uv_inet_ntop(AF_INET6, &in6->sin6_addr, ip, INET6_ADDRSTRLEN);
+            sv_ip = sv_2mortal(newSV(0));
+            sv_setpv(sv_ip, ip);
+            sv_port = sv_2mortal(newSViv(htons(in6->sin6_port)));
+            break;
+        default:
+            croak("bad family");
+    }
+
+    ST(0) = sv_ip;
+    ST(1) = sv_port;
+    XSRETURN(2);
+}
+
 int
 uv_tcp_connect(uv_tcp_t* tcp, const char* ip, int port, SV* cb)
 CODE:
