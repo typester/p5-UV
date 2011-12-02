@@ -314,16 +314,18 @@ static void recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
 
 static void timer_cb(uv_timer_t* handle, int status) {
     SV* cb;
+    SV* sv_status;
 
     dSP;
 
     ENTER;
     SAVETMPS;
 
-    PUSHMARK(SP);
-    PUTBACK;
+    sv_status = sv_2mortal(newSViv(status));
 
-    assert(0 == status);
+    PUSHMARK(SP);
+    XPUSHs(sv_status);
+    PUTBACK;
 
     cb = (SV*)handle->data;
 
