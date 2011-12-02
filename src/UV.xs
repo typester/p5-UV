@@ -10,6 +10,23 @@
 
 #include <uv.h>
 
+/* from node.js, will remove when libuv support this
+ * Temporary hack: libuv should provide uv_inet_pton and uv_inet_ntop.
+ */
+#if defined(__MINGW32__) || defined(_MSC_VER)
+  extern "C" {
+#   include <inet_net_pton.h>
+#   include <inet_ntop.h>
+  }
+# define uv_inet_pton ares_inet_pton
+# define uv_inet_ntop ares_inet_ntop
+
+#else // __POSIX__
+# include <arpa/inet.h>
+# define uv_inet_pton inet_pton
+# define uv_inet_ntop inet_ntop
+#endif
+
 #define UV_ERRNO_CONST_GEN(val, name, s) \
     newCONSTSUB(stash, #name, newSViv(val));
 
@@ -174,6 +191,100 @@ static void write_cb(uv_write_t* req, int status){
     free(req);
 }
 
+static void send_cb(uv_udp_send_t* req, int status) {
+    uv_udp_t* udp      = req->handle;
+    cb_pair_t* cb_pair = (cb_pair_t*)udp->data;
+    SV* sv_status;
+    dSP;
+
+    if (cb_pair->write_cb) {
+        ENTER;
+        SAVETMPS;
+
+        sv_status = sv_2mortal(newSViv(status));
+
+        PUSHMARK(SP);
+        XPUSHs(sv_status);
+        PUTBACK;
+
+        call_sv(cb_pair->write_cb, G_SCALAR);
+
+        SPAGAIN;
+
+        PUTBACK;
+        FREETMPS;
+        LEAVE;
+    }
+
+    free(req);
+}
+
+static void recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
+    struct sockaddr* addr, unsigned flags) {
+
+    SV* sv_nread;
+    SV* sv_buf;
+    SV* sv_host;
+    SV* sv_port;
+    SV* sv_flags;
+    struct sockaddr_in* addrin;
+    struct sockaddr_in6* addrin6;
+    char ip[INET6_ADDRSTRLEN];
+    dSP;
+
+    ENTER;
+    SAVETMPS;
+
+    sv_nread = sv_2mortal(newSViv(nread));
+    sv_flags = sv_2mortal(newSViv(flags));
+    if (nread > 0) {
+        sv_buf = sv_2mortal(newSVpv(buf.base, nread));
+    }
+    else {
+        sv_buf = sv_2mortal(newSV(0));
+    }
+
+    switch (addr->sa_family) {
+        case AF_INET:
+            addrin = (struct sockaddr_in*)addr;
+            uv_inet_ntop(AF_INET, &addrin->sin_addr, ip, INET6_ADDRSTRLEN);
+            sv_host = sv_2mortal(newSV(0));
+            sv_setpv(sv_host, ip);
+            sv_port = sv_2mortal(newSViv(ntohs(addrin->sin_port)));
+            break;
+
+        case AF_INET6:
+            addrin6 = (struct sockaddr_in6*)addr;
+            uv_inet_ntop(AF_INET6, &addrin6->sin6_addr, ip, INET6_ADDRSTRLEN);
+            sv_host = sv_2mortal(newSV(0));
+            sv_setpv(sv_host, ip);
+            sv_port = sv_2mortal(newSViv(ntohs(addrin6->sin6_port)));
+            break;
+
+        default:
+            assert(0 && "bad address family");
+            abort();
+    }
+
+    PUSHMARK(SP);
+    XPUSHs(sv_nread);
+    XPUSHs(sv_buf);
+    XPUSHs(sv_host);
+    XPUSHs(sv_port);
+    XPUSHs(sv_flags);
+    PUTBACK;
+
+    call_sv(((cb_pair_t*)handle->data)->read_cb, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+
+    free(buf.base);
+}
+
 static void timer_cb(uv_timer_t* handle, int status) {
     SV* cb;
 
@@ -205,7 +316,17 @@ PROTOTYPES: DISABLE
 BOOT:
 {
     HV* stash = gv_stashpv("UV", 1);
+
+    /* errno */
     UV_ERRNO_MAP(UV_ERRNO_CONST_GEN);
+
+    /* udp */
+    newCONSTSUB(stash, "UDP_IPV6ONLY", newSViv(UV_UDP_IPV6ONLY));
+    newCONSTSUB(stash, "UDP_PARTIAL", newSViv(UV_UDP_PARTIAL));
+
+    /* udp membership */
+    newCONSTSUB(stash, "LEAVE_GROUP", newSViv(UV_LEAVE_GROUP));
+    newCONSTSUB(stash, "JOIN_GROUP", newSViv(UV_JOIN_GROUP));
 }
 
 void
@@ -427,6 +548,125 @@ CODE:
 }
 OUTPUT:
     RETVAL
+
+void
+uv_udp_init()
+CODE:
+{
+    SV* sv_udp;
+    uv_udp_t* udp;
+    HV* hv;
+    int r;
+
+    hv = (HV*)sv_2mortal((SV*)newHV());
+    sv_udp = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv_udp, gv_stashpv("UV::udp", 1));
+
+    udp = (uv_udp_t*)malloc(sizeof(uv_udp_t));
+    assert(udp);
+
+    r = uv_udp_init(uv_default_loop(), udp);
+    assert(0 == r);
+
+    udp->data = (void*)calloc(1, sizeof(cb_pair_t));
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)udp;
+
+    ST(0) = sv_udp;
+}
+
+int
+uv_udp_bind(uv_udp_t* udp, const char* ip, int port, int flags = 0)
+CODE:
+{
+    RETVAL = uv_udp_bind(udp, uv_ip4_addr(ip, port), flags);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_udp_bind6(uv_udp_t* udp, const char* ip, int port, int flags = 0)
+CODE:
+{
+    RETVAL = uv_udp_bind6(udp, uv_ip6_addr(ip, port), flags);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_udp_set_membership(uv_udp_t* udp, const char* multicast_addr, const char* interface_addr, int membership)
+
+int
+uv_udp_send(uv_udp_t* udp, SV* sv_buf, const char* ip, int port, SV* cb = NULL)
+CODE:
+{
+    cb_pair_t* cb_pair = (cb_pair_t*)udp->data;
+    char* buf;
+    STRLEN len;
+    uv_udp_send_t* req;
+    uv_buf_t b;
+
+    if (cb_pair->write_cb)
+        SvREFCNT_dec(cb_pair->write_cb);
+    if (cb)
+        cb_pair->write_cb = SvREFCNT_inc(cb);
+
+    req = (uv_udp_send_t*)malloc(sizeof(uv_udp_send_t));
+    assert(req);
+
+    buf = SvPV(sv_buf, len);
+    b   = uv_buf_init(buf, len);
+
+    RETVAL = uv_udp_send(req, udp, &b, 1, uv_ip4_addr(ip, port), send_cb);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_udp_send6(uv_udp_t* udp, SV* sv_buf, const char* ip, int port, SV* cb = NULL)
+CODE:
+{
+    cb_pair_t* cb_pair = (cb_pair_t*)udp->data;
+    char* buf;
+    STRLEN len;
+    uv_udp_send_t* req;
+    uv_buf_t b;
+
+    if (cb_pair->write_cb)
+        SvREFCNT_dec(cb_pair->write_cb);
+    if (cb)
+        cb_pair->write_cb = SvREFCNT_inc(cb);
+
+    req = (uv_udp_send_t*)malloc(sizeof(uv_udp_send_t));
+    assert(req);
+
+    buf = SvPV(sv_buf, len);
+    b   = uv_buf_init(buf, len);
+
+    RETVAL = uv_udp_send6(req, udp, &b, 1, uv_ip6_addr(ip, port), send_cb);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_udp_recv_start(uv_udp_t* udp, SV* cb)
+CODE:
+{
+    cb_pair_t* cb_pair = (cb_pair_t*)udp->data;
+
+    if (cb_pair->read_cb)
+        SvREFCNT_dec(cb_pair->read_cb);
+    cb_pair->read_cb = SvREFCNT_inc(cb);
+
+    RETVAL = uv_udp_recv_start(udp, alloc_cb, recv_cb);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_udp_recv_stop(uv_udp_t* udp)
 
 void
 uv_timer_init()
