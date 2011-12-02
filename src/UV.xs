@@ -336,6 +336,66 @@ static void timer_cb(uv_timer_t* handle, int status) {
     LEAVE;
 }
 
+static void getaddrinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo* res) {
+    SV* sv_status;
+    AV* av_res;
+    SV* sv_res;
+    struct addrinfo* address;
+    struct sockaddr_in* in;
+    struct sockaddr_in6* in6;
+    char ip[INET6_ADDRSTRLEN];
+    SV* sv_ip;
+    dSP;
+
+    sv_status = sv_2mortal(newSViv(status));
+
+    av_res = (AV*)sv_2mortal((SV*)newAV());
+    sv_res = sv_2mortal(newRV_inc((SV*)av_res));
+
+    if (0 == status) {
+        for (address = res; address; address = address->ai_next) {
+            assert(address->ai_socktype == SOCK_STREAM);
+
+            switch (address->ai_family) {
+                case AF_INET:
+                    in = (struct sockaddr_in*)address->ai_addr;
+                    uv_inet_ntop(AF_INET, &in->sin_addr, ip, INET6_ADDRSTRLEN);
+                    sv_ip = newSV(0);
+                    sv_setpv(sv_ip, ip);
+                    av_push(av_res, sv_ip);
+                    break;
+                case AF_INET6:
+                    in6 = (struct sockaddr_in6*)address->ai_addr;
+                    uv_inet_ntop(AF_INET6, &in6->sin6_addr, ip, INET6_ADDRSTRLEN);
+                    sv_ip = newSV(0);
+                    sv_setpv(sv_ip, ip);
+                    av_push(av_res, sv_ip);
+                    break;
+            }
+        }
+    }
+
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
+    XPUSHs(sv_status);
+    XPUSHs(sv_res);
+    PUTBACK;
+
+    call_sv((SV*)handle->data, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+
+    uv_freeaddrinfo(res);
+    SvREFCNT_dec(handle->data);
+    free(handle);
+}
+
 MODULE=UV PACKAGE=UV PREFIX=uv_
 
 PROTOTYPES: DISABLE
@@ -903,3 +963,39 @@ CODE:
 OUTPUT:
     RETVAL
 
+int
+uv_getaddrinfo(const char* node, SV* sv_service, SV* cb, int hint = 0)
+CODE:
+{
+    uv_getaddrinfo_t* handle;
+    struct addrinfo hints;
+    int fam;
+    char* service = NULL;
+
+    if (SvPOK(sv_service)) {
+        service = SvPV_nolen(sv_service);
+    }
+
+    fam = AF_UNSPEC;
+    switch (hint) {
+        case 4:
+            fam = AF_INET;
+            break;
+        case 6:
+            fam = AF_INET6;
+            break;
+    }
+
+    handle = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
+    assert(handle);
+
+    handle->data = (void*)SvREFCNT_inc(cb);
+
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = fam;
+    hints.ai_socktype = SOCK_STREAM;
+
+    RETVAL = uv_getaddrinfo(uv_default_loop(), handle, getaddrinfo_cb, node, service, &hints);
+}
+OUTPUT:
+    RETVAL
