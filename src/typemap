@@ -4,6 +4,7 @@ uv_stream_t*    T_UV_HANDLE
 uv_tcp_t*       T_UV_HANDLE
 uv_udp_t*       T_UV_HANDLE
 uv_timer_t*     T_UV_HANDLE
+uv_idle_t*      T_UV_HANDLE
 
 INPUT
 T_UV_HANDLE
