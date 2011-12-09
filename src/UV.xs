@@ -13,12 +13,13 @@
 /* from node.js, will remove when libuv support this
  * Temporary hack: libuv should provide uv_inet_pton and uv_inet_ntop.
  */
-#if defined(__MINGW32__) || defined(_MSC_VER)
+#if defined(_MSC_VER)
   extern "C" {
 #   include <inet_net_pton.h>
 #   include <inet_ntop.h>
   }
 # define uv_inet_pton ares_inet_pton
+#elif defined(__MINGW32__)
 # define uv_inet_ntop ares_inet_ntop
 
 #else // __POSIX__
@@ -67,7 +68,7 @@ static void shutdown_cb(uv_shutdown_t* req, int status) {
 static void close_cb(uv_handle_t* handle) {
     cb_pair_t* pair;
 
-    if (UV_TIMER == handle->type) {
+    if (UV_TIMER == handle->type || UV_IDLE == handle->type) {
         if (NULL != handle->data) {
             SvREFCNT_dec((SV*)handle->data);
         }
@@ -338,6 +339,32 @@ static void timer_cb(uv_timer_t* handle, int status) {
     LEAVE;
 }
 
+static void idle_cb(uv_idle_t* handle, int status) {
+    SV* cb;
+    SV* sv_status;
+
+    dSP;
+
+    ENTER;
+    SAVETMPS;
+
+    sv_status = sv_2mortal(newSViv(status));
+
+    PUSHMARK(SP);
+    XPUSHs(sv_status);
+    PUTBACK;
+
+    cb = (SV*)handle->data;
+
+    call_sv(cb, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+}
+
 static void getaddrinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo* res) {
     SV* sv_status;
     AV* av_res;
@@ -424,6 +451,19 @@ CODE:
 {
     uv_run(uv_default_loop());
 }
+
+int
+uv_idle_start(uv_idle_t* idle, SV* cb)
+CODE:
+{
+    if (idle->data)
+        SvREFCNT_dec((SV*)idle->data);
+    idle->data = (void*)SvREFCNT_inc(cb);
+
+    RETVAL = uv_idle_start(idle, idle_cb);
+}
+OUTPUT:
+    RETVAL
 
 void
 uv_version()
@@ -964,6 +1004,36 @@ CODE:
 }
 OUTPUT:
     RETVAL
+
+void
+uv_idle_init()
+CODE:
+{
+    SV* sv_idle;
+    uv_idle_t* idle;
+    HV* hv;
+    int r;
+
+    hv      = (HV*)sv_2mortal((SV*)newHV());
+    sv_idle = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv_idle, gv_stashpv("UV::idle", 1));
+
+    idle = (uv_idle_t*)malloc(sizeof(uv_idle_t));
+    assert(idle);
+
+    r = uv_idle_init(uv_default_loop(), idle);
+    assert(0 == r);
+    idle->data = NULL;
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)idle;
+
+    ST(0) = sv_idle;
+}
+
+int
+uv_idle_stop(uv_idle_t* idle)
 
 int
 uv_getaddrinfo(const char* node, SV* sv_service, SV* cb, int hint = 0)
