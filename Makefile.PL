@@ -37,8 +37,8 @@ makemaker_args->{MYEXTLIB} = 'deps/libuv/uv$(LIB_EXT)';
     package MY;
     sub postamble {
         <<'__EOF__';
-$(MYEXTLIB): deps/libuv/Makefile
-	cd deps/libuv && $(MAKE)
+$(MYEXTLIB): deps/libuv/uv.a
+	$(MAKE) -C deps/libuv
 __EOF__
     }
 }
