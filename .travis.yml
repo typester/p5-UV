@@ -1,5 +1,5 @@
 language: "perl"
-before_script:
+before_install:
     - git submodule update --init --recursive
     - cpanm Module::Install
     - cpanm Module::Install::XSUtil
