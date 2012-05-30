@@ -272,26 +272,32 @@ static void recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
         sv_buf = sv_2mortal(newSV(0));
     }
 
-    switch (addr->sa_family) {
-        case AF_INET:
-            addrin = (struct sockaddr_in*)addr;
-            uv_inet_ntop(AF_INET, &addrin->sin_addr, ip, INET6_ADDRSTRLEN);
-            sv_host = sv_2mortal(newSV(0));
-            sv_setpv(sv_host, ip);
-            sv_port = sv_2mortal(newSViv(ntohs(addrin->sin_port)));
-            break;
+    if (NULL != addr) {
+        switch (addr->sa_family) {
+            case AF_INET:
+                addrin = (struct sockaddr_in*)addr;
+                uv_inet_ntop(AF_INET, &addrin->sin_addr, ip, INET6_ADDRSTRLEN);
+                sv_host = sv_2mortal(newSV(0));
+                sv_setpv(sv_host, ip);
+                sv_port = sv_2mortal(newSViv(ntohs(addrin->sin_port)));
+                break;
 
-        case AF_INET6:
-            addrin6 = (struct sockaddr_in6*)addr;
-            uv_inet_ntop(AF_INET6, &addrin6->sin6_addr, ip, INET6_ADDRSTRLEN);
-            sv_host = sv_2mortal(newSV(0));
-            sv_setpv(sv_host, ip);
-            sv_port = sv_2mortal(newSViv(ntohs(addrin6->sin6_port)));
-            break;
+            case AF_INET6:
+                addrin6 = (struct sockaddr_in6*)addr;
+                uv_inet_ntop(AF_INET6, &addrin6->sin6_addr, ip, INET6_ADDRSTRLEN);
+                sv_host = sv_2mortal(newSV(0));
+                sv_setpv(sv_host, ip);
+                sv_port = sv_2mortal(newSViv(ntohs(addrin6->sin6_port)));
+                break;
 
-        default:
-            assert(0 && "bad address family");
-            abort();
+            default:
+                assert(0 && "bad address family");
+                abort();
+        }
+    }
+    else {
+        sv_host = sv_2mortal(newSV(0));
+        sv_port = sv_2mortal(newSV(0));
     }
 
     PUSHMARK(SP);
