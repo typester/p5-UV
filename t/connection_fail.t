@@ -3,7 +3,7 @@ use warnings;
 use Test::More;
 use Test::TCP;
 
-use_ok 'UV';
+use UV;
 
 my ($tcp, $timer);
 my $connect_cb_calls = 0;

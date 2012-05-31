@@ -2,7 +2,7 @@ use strict;
 use warnings;
 use Test::More;
 
-use_ok 'UV';
+use UV;
 
 {
     my $one    = 0;

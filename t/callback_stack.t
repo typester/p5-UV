@@ -4,7 +4,7 @@ use Test::More;
 use Test::TCP;
 use FindBin;
 
-use_ok 'UV';
+use UV;
 
 my $testport = empty_port();
 
