@@ -68,7 +68,10 @@ static void shutdown_cb(uv_shutdown_t* req, int status) {
 static void close_cb(uv_handle_t* handle) {
     cb_pair_t* pair;
 
-    if (UV_TIMER == handle->type || UV_IDLE == handle->type) {
+    if (UV_TIMER   == handle->type || UV_IDLE == handle->type
+     || UV_PREPARE == handle->type || UV_CHECK == handle->type
+     || UV_ASYNC   == handle->type)
+    {
         if (NULL != handle->data) {
             SvREFCNT_dec((SV*)handle->data);
         }
@@ -175,6 +178,45 @@ static void read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
     PUTBACK;
 
     cb = ((cb_pair_t*)stream->data)->read_cb;
+
+    call_sv(cb, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+
+    free(buf.base);
+}
+
+static void read2_cb(uv_pipe_t* pipe, ssize_t nread, uv_buf_t buf, uv_handle_type pending) {
+    SV* cb;
+    SV* sv_nread;
+    SV* sv_buf;
+    SV* sv_pending;
+
+    dSP;
+
+    ENTER;
+    SAVETMPS;
+
+    sv_nread = sv_2mortal(newSViv(nread));
+    if (nread > 0) {
+        sv_buf = sv_2mortal(newSVpv(buf.base, nread));
+    }
+    else {
+        sv_buf = sv_2mortal(newSV(0));
+    }
+    sv_pending = sv_2mortal(newSViv(pending));
+
+    PUSHMARK(SP);
+    XPUSHs(sv_nread);
+    XPUSHs(sv_buf);
+    XPUSHs(sv_pending);
+    PUTBACK;
+
+    cb = ((cb_pair_t*)pipe->data)->read_cb;
 
     call_sv(cb, G_SCALAR);
 
@@ -319,7 +361,53 @@ static void recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
     free(buf.base);
 }
 
-static void timer_cb(uv_timer_t* handle, int status) {
+static void prepare_cb(uv_prepare_t* handle, int status) {
+    SV* cb = (SV*)handle->data;
+    SV* sv_status;
+    dSP;
+
+    sv_status = sv_2mortal(newSViv(status));
+
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
+    XPUSHs(sv_status);
+    PUTBACK;
+
+    call_sv(cb, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+}
+
+static void check_cb(uv_check_t* handle, int status) {
+    SV* cb = (SV*)handle->data;
+    SV* sv_status;
+    dSP;
+
+    sv_status = sv_2mortal(newSViv(status));
+
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
+    XPUSHs(sv_status);
+    PUTBACK;
+
+    call_sv(cb, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+}
+
+static void idle_cb(uv_idle_t* handle, int status) {
     SV* cb;
     SV* sv_status;
 
@@ -345,7 +433,33 @@ static void timer_cb(uv_timer_t* handle, int status) {
     LEAVE;
 }
 
-static void idle_cb(uv_idle_t* handle, int status) {
+static void async_cb(uv_async_t* handle, int status) {
+    SV* cb;
+    SV* sv_status;
+
+    dSP;
+
+    ENTER;
+    SAVETMPS;
+
+    sv_status = sv_2mortal(newSViv(status));
+
+    PUSHMARK(SP);
+    XPUSHs(sv_status);
+    PUTBACK;
+
+    cb = (SV*)handle->data;
+
+    call_sv(cb, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+}
+
+static void timer_cb(uv_timer_t* handle, int status) {
     SV* cb;
     SV* sv_status;
 
@@ -442,6 +556,23 @@ BOOT:
     /* errno */
     UV_ERRNO_MAP(UV_ERRNO_CONST_GEN);
 
+    /* handle type */
+    newCONSTSUB(stash, "UNKNOWN_HANDLE", newSViv(UV_UNKNOWN_HANDLE));
+    newCONSTSUB(stash, "ASYNC", newSViv(UV_ASYNC));
+    newCONSTSUB(stash, "CHECK", newSViv(UV_CHECK));
+    newCONSTSUB(stash, "FS_EVENT", newSViv(UV_FS_EVENT));
+    newCONSTSUB(stash, "IDLE", newSViv(UV_IDLE));
+    newCONSTSUB(stash, "NAMED_PIPE", newSViv(UV_NAMED_PIPE));
+    newCONSTSUB(stash, "POLL", newSViv(UV_POLL));
+    newCONSTSUB(stash, "PREPARE", newSViv(UV_PREPARE));
+    newCONSTSUB(stash, "PROCESS", newSViv(UV_PROCESS));
+    newCONSTSUB(stash, "TCP", newSViv(UV_TCP));
+    newCONSTSUB(stash, "TIMER", newSViv(UV_TIMER));
+    newCONSTSUB(stash, "TTY", newSViv(UV_TTY));
+    newCONSTSUB(stash, "UDP", newSViv(UV_UDP));
+    newCONSTSUB(stash, "ARES_TASK", newSViv(UV_ARES_TASK));
+    newCONSTSUB(stash, "FILE", newSViv(UV_FILE));
+
     /* udp */
     newCONSTSUB(stash, "UDP_IPV6ONLY", newSViv(UV_UDP_IPV6ONLY));
     newCONSTSUB(stash, "UDP_PARTIAL", newSViv(UV_UDP_PARTIAL));
@@ -457,19 +588,6 @@ CODE:
 {
     uv_run(uv_default_loop());
 }
-
-int
-uv_idle_start(uv_idle_t* idle, SV* cb)
-CODE:
-{
-    if (idle->data)
-        SvREFCNT_dec((SV*)idle->data);
-    idle->data = (void*)SvREFCNT_inc(cb);
-
-    RETVAL = uv_idle_start(idle, idle_cb);
-}
-OUTPUT:
-    RETVAL
 
 void
 uv_version()
@@ -585,6 +703,21 @@ int
 uv_read_stop(uv_stream_t* stream)
 
 int
+uv_read2_start(uv_stream_t* stream, SV* cb)
+CODE:
+{
+    cb_pair_t* cb_pair = (cb_pair_t*)stream->data;
+
+    if (cb_pair->read_cb)
+        SvREFCNT_dec(cb_pair->read_cb);
+    cb_pair->read_cb = SvREFCNT_inc(cb);
+
+    RETVAL = uv_read2_start(stream, alloc_cb, read2_cb);
+}
+OUTPUT:
+    RETVAL
+
+int
 uv_write(uv_stream_t* stream, SV* sv_buf, SV* cb = NULL)
 CODE:
 {
@@ -594,8 +727,10 @@ CODE:
     uv_write_t* req;
     uv_buf_t b;
 
-    if (cb_pair->write_cb)
+    if (cb_pair->write_cb) {
         SvREFCNT_dec(cb_pair->write_cb);
+        cb_pair->write_cb = NULL;
+    }
 
     if (cb)
         cb_pair->write_cb = SvREFCNT_inc(cb);
@@ -611,6 +746,44 @@ CODE:
 }
 OUTPUT:
     RETVAL
+
+int
+uv_write2(uv_stream_t* stream, SV* sv_buf, uv_stream_t* send_stream, SV* cb = NULL)
+CODE:
+{
+    cb_pair_t* cb_pair = (cb_pair_t*)stream->data;
+    char* buf;
+    STRLEN len;
+    uv_write_t* req;
+    uv_buf_t b;
+
+    if (cb_pair->write_cb) {
+        SvREFCNT_dec(cb_pair->write_cb);
+        cb_pair->write_cb = NULL;
+    }
+
+    if (cb)
+        cb_pair->write_cb = SvREFCNT_inc(cb);
+
+    req = (uv_write_t*)malloc(sizeof(uv_write_t));
+    assert(req);
+
+    buf = SvPV(sv_buf, len);
+    b   = uv_buf_init(buf, len);
+
+    RETVAL = uv_write2(req, stream, &b, 1, send_stream, write_cb);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_is_readable(uv_stream_t* stream);
+
+int
+uv_is_writable(uv_stream_t* stream);
+
+int
+uv_is_closing(uv_handle_t* handle);
 
 void
 uv_tcp_init()
@@ -880,6 +1053,18 @@ int
 uv_udp_set_membership(uv_udp_t* udp, const char* multicast_addr, const char* interface_addr, int membership)
 
 int
+uv_udp_set_multicast_loop(uv_udp_t* udp, int on);
+
+int
+uv_udp_set_multicast_ttl(uv_udp_t* udp, int ttl);
+
+int
+uv_udp_set_broadcast(uv_udp_t* udp, int on);
+
+int
+uv_udp_set_ttl(uv_udp_t* udp, int ttl);
+
+int
 uv_udp_send(uv_udp_t* udp, SV* sv_buf, const char* ip, int port, SV* cb = NULL)
 CODE:
 {
@@ -950,6 +1135,291 @@ int
 uv_udp_recv_stop(uv_udp_t* udp)
 
 void
+uv_tty_init(int fd, int readable)
+CODE:
+{
+    SV* sv_tty;
+    uv_tty_t* tty;
+    HV* hv;
+    int r;
+
+    hv = (HV*)sv_2mortal((SV*)newHV());
+    sv_tty = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv_tty, gv_stashpv("UV::tty", 1));
+
+    tty = (uv_tty_t*)malloc(sizeof(uv_tty_t));
+    assert(tty);
+
+    r = uv_tty_init(uv_default_loop(), tty, fd, readable);
+    assert(0 == r);
+
+    tty->data = (void*)calloc(1, sizeof(cb_pair_t));
+    assert(tty->data);
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)tty;
+
+    ST(0) = sv_tty;
+    XSRETURN(1);
+}
+
+int
+uv_tty_set_mode(uv_tty_t* tty, int mode)
+
+void
+uv_tty_reset_mode()
+
+void
+uv_tty_get_winsize(uv_tty_t* tty)
+CODE:
+{
+    int width, height;
+    int r;
+    SV* sv_width;
+    SV* sv_height;
+
+    r = uv_tty_get_winsize(tty, &width, &height);
+    assert(0 == r);
+
+    sv_width = sv_2mortal(newSViv(width));
+    sv_height = sv_2mortal(newSViv(height));
+
+    ST(0) = sv_width;
+    ST(1) = sv_height;
+    XSRETURN(2);
+}
+
+int
+uv_guess_handle(int fd)
+
+void
+uv_pipe_init(int ipc)
+CODE:
+{
+    SV* sv_pipe;
+    uv_pipe_t* pipe;
+    HV* hv;
+    int r;
+
+    hv = (HV*)sv_2mortal((SV*)newHV());
+    sv_pipe = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv_pipe, gv_stashpv("UV::pipe", 1));
+
+    pipe = (uv_pipe_t*)malloc(sizeof(uv_pipe_t));
+    assert(pipe);
+
+    r = uv_pipe_init(uv_default_loop(), pipe, ipc);
+    assert(0 == r);
+
+    pipe->data = (void*)calloc(1, sizeof(cb_pair_t));
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)pipe;
+
+    ST(0) = sv_pipe;
+    XSRETURN(1);
+}
+
+void
+uv_pipe_open(uv_pipe_t* pipe, int fd)
+
+int
+uv_pipe_bind(uv_pipe_t* pipe, const char* name)
+
+void
+uv_pipe_connect(uv_pipe_t* pipe, const char* name, SV* cb)
+CODE:
+{
+    uv_connect_t* req;
+    cb_pair_t* cb_pair = (cb_pair_t*)pipe->data;
+
+    if (cb_pair->connect_cb)
+        SvREFCNT_dec(cb_pair->connect_cb);
+    cb_pair->connect_cb = SvREFCNT_inc(cb);
+
+    req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+    assert(req);
+
+    uv_pipe_connect(req, pipe, name, connect_cb);
+}
+
+void
+uv_prepare_init()
+CODE:
+{
+    SV* sv_prepare;
+    uv_prepare_t* prepare;
+    HV* hv;
+    int r;
+
+    hv = (HV*)sv_2mortal((SV*)newHV());
+    sv_prepare = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv_prepare, gv_stashpv("UV::prepare", 1));
+
+    prepare = (uv_prepare_t*)malloc(sizeof(uv_prepare_t));
+    assert(prepare);
+
+    r = uv_prepare_init(uv_default_loop(), prepare);
+    assert(0 == r);
+
+    prepare->data = NULL;
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)prepare;
+
+    ST(0) = sv_prepare;
+    XSRETURN(1);
+}
+
+int
+uv_prepare_start(uv_prepare_t* prepare, SV* cb)
+CODE:
+{
+    if (prepare->data) {
+        SvREFCNT_dec((SV*)prepare->data);
+        prepare->data = NULL;
+    }
+    if (cb) {
+        prepare->data = (void*)SvREFCNT_inc(cb);
+    }
+
+    RETVAL = uv_prepare_start(prepare, prepare_cb);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_prepare_stop(uv_prepare_t* prepare)
+
+void
+uv_check_init()
+CODE:
+{
+    SV* sv_check;
+    uv_check_t* check;
+    HV* hv;
+    int r;
+
+    hv = (HV*)sv_2mortal((SV*)newHV());
+    sv_check = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv_check, gv_stashpv("UV::check", 1));
+
+    check = (uv_check_t*)malloc(sizeof(uv_check_t));
+    assert(check);
+
+    r = uv_check_init(uv_default_loop(), check);
+    assert(0 == r);
+
+    check->data = NULL;
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)check;
+
+    ST(0) = sv_check;
+    XSRETURN(1);
+}
+
+int
+uv_check_start(uv_check_t* check, SV* cb)
+CODE:
+{
+    if (check->data) {
+        SvREFCNT_dec((SV*)check->data);
+        check->data = NULL;
+    }
+
+    if (cb) {
+        check->data = SvREFCNT_inc(cb);
+    }
+
+    RETVAL = uv_check_start(check, check_cb);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_check_stop(uv_check_t* check)
+
+void
+uv_idle_init()
+CODE:
+{
+    SV* sv_idle;
+    uv_idle_t* idle;
+    HV* hv;
+    int r;
+
+    hv      = (HV*)sv_2mortal((SV*)newHV());
+    sv_idle = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv_idle, gv_stashpv("UV::idle", 1));
+
+    idle = (uv_idle_t*)malloc(sizeof(uv_idle_t));
+    assert(idle);
+
+    r = uv_idle_init(uv_default_loop(), idle);
+    assert(0 == r);
+    idle->data = NULL;
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)idle;
+
+    ST(0) = sv_idle;
+    XSRETURN(1);
+}
+
+int
+uv_idle_start(uv_idle_t* idle, SV* cb)
+CODE:
+{
+    if (idle->data)
+        SvREFCNT_dec((SV*)idle->data);
+    idle->data = (void*)SvREFCNT_inc(cb);
+
+    RETVAL = uv_idle_start(idle, idle_cb);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_idle_stop(uv_idle_t* idle)
+
+void
+uv_async_init(SV* cb)
+CODE:
+{
+    SV* sv_async;
+    uv_async_t* async;
+    HV* hv;
+    int r;
+
+    hv = (HV*)sv_2mortal((SV*)newHV());
+    sv_async = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv_async, gv_stashpv("UV::async", 1));
+
+    async = (uv_async_t*)malloc(sizeof(uv_async_t));
+    assert(async);
+
+    r = uv_async_init(uv_default_loop(), async, async_cb);
+
+    async->data = (void*)SvREFCNT_inc(cb);
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)async;
+
+    ST(0) = sv_async;
+    XSRETURN(1);
+}
+
+int
+uv_async_send(uv_async_t* async)
+
+void
 uv_timer_init()
 CODE:
 {
@@ -1010,36 +1480,6 @@ CODE:
 }
 OUTPUT:
     RETVAL
-
-void
-uv_idle_init()
-CODE:
-{
-    SV* sv_idle;
-    uv_idle_t* idle;
-    HV* hv;
-    int r;
-
-    hv      = (HV*)sv_2mortal((SV*)newHV());
-    sv_idle = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_idle, gv_stashpv("UV::idle", 1));
-
-    idle = (uv_idle_t*)malloc(sizeof(uv_idle_t));
-    assert(idle);
-
-    r = uv_idle_init(uv_default_loop(), idle);
-    assert(0 == r);
-    idle->data = NULL;
-
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)idle;
-
-    ST(0) = sv_idle;
-}
-
-int
-uv_idle_stop(uv_idle_t* idle)
 
 int
 uv_getaddrinfo(const char* node, SV* sv_service, SV* cb, int hint = 0)
