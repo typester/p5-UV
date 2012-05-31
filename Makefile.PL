@@ -8,6 +8,7 @@ cc_src_paths 'src';
 cc_include_paths 'deps/libuv/include';
 cc_warnings;
 
+test_requires 'Test::TCP';
 
 if ($^O eq 'linux') {
     cc_libs 'm', 'rt', 'pthread';
