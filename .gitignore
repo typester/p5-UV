@@ -10,3 +10,4 @@ blib/
 test.pl
 *.o
 src/UV.c
+MYMETA.json
