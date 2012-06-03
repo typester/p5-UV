@@ -854,7 +854,7 @@ CODE:
     SV* sv_ip;
     SV* sv_port;
 
-    addrlen = sizeof(addrlen);
+    addrlen = sizeof(address);
     r = uv_tcp_getsockname(handle, (struct sockaddr*)&address, &addrlen);
     assert(0 == r);
 
@@ -896,7 +896,7 @@ CODE:
     SV* sv_ip;
     SV* sv_port;
 
-    addrlen = sizeof(addrlen);
+    addrlen = sizeof(address);
     r = uv_tcp_getpeername(handle, (struct sockaddr*)&address, &addrlen);
     assert(0 == r);
 
