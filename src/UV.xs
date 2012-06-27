@@ -94,13 +94,20 @@ static void close_cb(uv_handle_t* handle) {
 
 static void poll_cb(uv_poll_t* handle, int status, int events) {
     SV* cb;
+    SV* sv_status;
+    SV* sv_events;
 
     dSP;
 
     ENTER;
     SAVETMPS;
 
+    sv_status = sv_2mortal(newSViv(status));
+    sv_events = sv_2mortal(newSViv(events));
+
     PUSHMARK(SP);
+    XPUSHs(sv_status);
+    XPUSHs(sv_events);
     PUTBACK;
 
     cb = (SV*)handle->data;
