@@ -590,6 +590,13 @@ CODE:
 }
 
 void
+uv_run_once()
+CODE:
+{
+    uv_run_once(uv_default_loop());
+}
+
+void
 uv_version()
 CODE:
 {
