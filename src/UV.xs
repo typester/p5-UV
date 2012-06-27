@@ -70,7 +70,7 @@ static void close_cb(uv_handle_t* handle) {
 
     if (UV_TIMER   == handle->type || UV_IDLE == handle->type
      || UV_PREPARE == handle->type || UV_CHECK == handle->type
-     || UV_ASYNC   == handle->type)
+     || UV_ASYNC   == handle->type || UV_POLL == handle->type)
     {
         if (NULL != handle->data) {
             SvREFCNT_dec((SV*)handle->data);
@@ -90,6 +90,27 @@ static void close_cb(uv_handle_t* handle) {
     }
 
     free(handle);
+}
+
+static void poll_cb(uv_poll_t* handle, int status, int events) {
+    SV* cb;
+
+    dSP;
+
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
+    PUTBACK;
+
+    cb = (SV*)handle->data;
+    call_sv(cb, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
 }
 
 static void connection_cb(uv_stream_t* server, int status) {
@@ -580,6 +601,10 @@ BOOT:
     /* udp membership */
     newCONSTSUB(stash, "LEAVE_GROUP", newSViv(UV_LEAVE_GROUP));
     newCONSTSUB(stash, "JOIN_GROUP", newSViv(UV_JOIN_GROUP));
+
+    /* poll */
+    newCONSTSUB(stash, "READABLE", newSViv(UV_READABLE));
+    newCONSTSUB(stash, "WRITABLE", newSViv(UV_WRITABLE));
 }
 
 void
@@ -1190,6 +1215,53 @@ CODE:
     XSRETURN(2);
 }
 
+void
+uv_poll_init(int fd)
+CODE:
+{
+    SV* sv_poll;
+    uv_poll_t* poll;
+    HV* hv;
+    int r;
+
+    hv = (HV*)sv_2mortal((SV*)newHV());
+    sv_poll = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv_poll, gv_stashpv("UV::poll", 1));
+
+    poll = (uv_poll_t*)malloc(sizeof(uv_poll_t));
+    if (NULL == poll) {
+        croak("cannot allocate memory");
+    }
+
+    r = uv_poll_init(uv_default_loop(), poll, fd);
+    if (r) {
+        croak("cannot allocate uv_poll object");
+    }
+
+    poll->data = NULL;
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)poll;
+
+    ST(0) = sv_poll;
+    XSRETURN(1);
+}
+
+int
+uv_poll_start(uv_poll_t* handle, int events, SV* cb)
+CODE:
+{
+    if (handle->data)
+        SvREFCNT_dec((SV*)handle->data);
+    handle->data = (void*)SvREFCNT_inc(cb);
+
+    RETVAL = uv_poll_start(handle, events, poll_cb);
+}
+
+int
+uv_poll_stop(uv_poll_t* handle)
+
 int
 uv_guess_handle(int fd)
 
@@ -1517,3 +1589,4 @@ CODE:
 }
 OUTPUT:
     RETVAL
+
