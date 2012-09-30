@@ -31,6 +31,9 @@
 #define UV_ERRNO_CONST_GEN(val, name, s) \
     newCONSTSUB(stash, #name, newSViv(val));
 
+#define UV_CONST_GEN(uc, lc) \
+    newCONSTSUB(stash, #uc, newSViv(UV_##uc));
+
 typedef struct {
     SV* connection_cb;
     SV* connect_cb;
@@ -585,21 +588,10 @@ BOOT:
     UV_ERRNO_MAP(UV_ERRNO_CONST_GEN);
 
     /* handle type */
-    newCONSTSUB(stash, "UNKNOWN_HANDLE", newSViv(UV_UNKNOWN_HANDLE));
-    newCONSTSUB(stash, "ASYNC", newSViv(UV_ASYNC));
-    newCONSTSUB(stash, "CHECK", newSViv(UV_CHECK));
-    newCONSTSUB(stash, "FS_EVENT", newSViv(UV_FS_EVENT));
-    newCONSTSUB(stash, "IDLE", newSViv(UV_IDLE));
-    newCONSTSUB(stash, "NAMED_PIPE", newSViv(UV_NAMED_PIPE));
-    newCONSTSUB(stash, "POLL", newSViv(UV_POLL));
-    newCONSTSUB(stash, "PREPARE", newSViv(UV_PREPARE));
-    newCONSTSUB(stash, "PROCESS", newSViv(UV_PROCESS));
-    newCONSTSUB(stash, "TCP", newSViv(UV_TCP));
-    newCONSTSUB(stash, "TIMER", newSViv(UV_TIMER));
-    newCONSTSUB(stash, "TTY", newSViv(UV_TTY));
-    newCONSTSUB(stash, "UDP", newSViv(UV_UDP));
-    newCONSTSUB(stash, "ARES_TASK", newSViv(UV_ARES_TASK));
-    newCONSTSUB(stash, "FILE", newSViv(UV_FILE));
+    UV_HANDLE_TYPE_MAP(UV_CONST_GEN);
+
+    /* req type */
+    UV_REQ_TYPE_MAP(UV_CONST_GEN);
 
     /* udp */
     newCONSTSUB(stash, "UDP_IPV6ONLY", newSViv(UV_UDP_IPV6ONLY));
