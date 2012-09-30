@@ -69,6 +69,10 @@ DESCRIPTION
     C application which uses libuv. Perl codes using this module can be
     easily converted to C programs.
 
+CAUTION
+    Currently this module is in early development stage. The APIs are still
+    fluid, and may change.
+
 THERE IS SOME LIMITATIONS AT THIS TIME
     No file-system apis, no threads apis at this time, it's not nessesary
     for my prototyping purpose now.

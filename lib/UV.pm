@@ -2,7 +2,7 @@ package UV;
 use strict;
 use XSLoader;
 
-our $VERSION = '0.1';
+our $VERSION = '0.12';
 
 XSLoader::load __PACKAGE__, $VERSION;
 
@@ -80,6 +80,10 @@ C<uv_listen> maps to C<UV::listen>, C<uv_tcp_connect> to C<UV::tcp_connect>, and
 
 This is because I'm using this module to make some prototypes for native C application which uses libuv.
 Perl codes using this module can be easily converted to C programs.
+
+=head1 CAUTION
+
+Currently this module is in early development stage. The APIs are still fluid, and may change.
 
 =head1 THERE IS SOME LIMITATIONS AT THIS TIME
 

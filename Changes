@@ -1,4 +1,7 @@
 Revision history for Perl extension UV
 
+0.12 2012-10-01T05:55:32+09:00
+     - added CAUTION section in doc ;)
+
 0.1  2012-09-30T15:45:53+09:00
      - initial version
