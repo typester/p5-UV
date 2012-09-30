@@ -16,6 +16,21 @@
 #define UV_CONST_GEN(uc, lc) \
     newCONSTSUB(stash, #uc, newSViv(UV_##uc));
 
+/* copy from libuv/src/uv-common.h */
+#ifndef _WIN32
+enum {
+  UV__HANDLE_INTERNAL = 0x8000,
+  UV__HANDLE_ACTIVE   = 0x4000,
+  UV__HANDLE_REF      = 0x2000,
+  UV__HANDLE_CLOSING  = 0 /* no-op on unix */
+};
+#else
+# define UV__HANDLE_INTERNAL  0x80
+# define UV__HANDLE_ACTIVE    0x40
+# define UV__HANDLE_REF       0x20
+# define UV__HANDLE_CLOSING   0x01
+#endif
+
 typedef struct {
     SV* connection_cb;
     SV* connect_cb;
@@ -498,6 +513,33 @@ static void timer_cb(uv_timer_t* handle, int status) {
     LEAVE;
 }
 
+static void walk_cb(uv_handle_t* handle, void* arg) {
+
+    HV* hv;
+    dSP;
+
+    hv = newHV();
+    hv_store(hv, "type", 4, newSViv(handle->type), 0); /* type */
+    hv_store(hv, "active", 6, newSViv((handle->flags & UV__HANDLE_ACTIVE) ? 1 : 0), 0);
+    hv_store(hv, "ref", 3, newSViv((handle->flags & UV__HANDLE_REF) ? 1 : 0), 0);
+    hv_store(hv, "closing", 7, newSViv((handle->flags & UV__HANDLE_CLOSING) ? 1 : 0), 0);
+
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
+    XPUSHs(hv);
+    PUTBACK;
+
+    call_sv((SV*)arg, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+}
+
 static void getaddrinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo* res) {
     SV* sv_status;
     AV* av_res;
@@ -688,6 +730,47 @@ CODE:
 }
 OUTPUT:
     RETVAL
+
+AV*
+uv_handles()
+CODE:
+{
+    ngx_queue_t* q;
+    ngx_queue_t* queue;
+    uv_loop_t* loop;
+    uv_handle_t* h;
+    HV* hv;
+    AV* av;
+
+    av = (AV*)sv_2mortal((SV*)newAV());
+    loop = uv_default_loop();
+    queue = &loop->handle_queue;
+
+    ngx_queue_foreach(q, queue) {
+        h = ngx_queue_data(q, uv_handle_t, handle_queue);
+        if (h->flags & UV__HANDLE_INTERNAL) continue; /* check internal bit */
+
+        hv = newHV();
+
+        hv_store(hv, "type", 4, newSViv(h->type), 0); /* type */
+        hv_store(hv, "active", 6, newSViv((h->flags & UV__HANDLE_ACTIVE) ? 1 : 0), 0);
+        hv_store(hv, "ref", 3, newSViv((h->flags & UV__HANDLE_REF) ? 1 : 0), 0);
+        hv_store(hv, "closing", 7, newSViv((h->flags & UV__HANDLE_CLOSING) ? 1 : 0), 0);
+
+        av_push(av, newRV_inc((SV*)hv));
+    }
+
+    RETVAL = av;
+}
+OUTPUT:
+    RETVAL
+
+void
+uv_walk(SV* cb)
+CODE:
+{
+    uv_walk(uv_default_loop(), walk_cb, SvREFCNT_inc(cb));
+}
 
 int
 uv_listen(uv_stream_t* stream, int backlog, SV* cb)
