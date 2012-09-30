@@ -513,6 +513,33 @@ static void timer_cb(uv_timer_t* handle, int status) {
     LEAVE;
 }
 
+static void walk_cb(uv_handle_t* handle, void* arg) {
+
+    HV* hv;
+    dSP;
+
+    hv = newHV();
+    hv_store(hv, "type", 4, newSViv(handle->type), 0); /* type */
+    hv_store(hv, "active", 6, newSViv((handle->flags & UV__HANDLE_ACTIVE) ? 1 : 0), 0);
+    hv_store(hv, "ref", 3, newSViv((handle->flags & UV__HANDLE_REF) ? 1 : 0), 0);
+    hv_store(hv, "closing", 7, newSViv((handle->flags & UV__HANDLE_CLOSING) ? 1 : 0), 0);
+
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
+    XPUSHs(hv);
+    PUTBACK;
+
+    call_sv((SV*)arg, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+}
+
 static void getaddrinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo* res) {
     SV* sv_status;
     AV* av_res;
@@ -737,6 +764,13 @@ CODE:
 }
 OUTPUT:
     RETVAL
+
+void
+uv_walk(SV* cb)
+CODE:
+{
+    uv_walk(uv_default_loop(), walk_cb, SvREFCNT_inc(cb));
+}
 
 int
 uv_listen(uv_stream_t* stream, int backlog, SV* cb)
