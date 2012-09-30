@@ -26,10 +26,12 @@ use UV;
     my $timeout_timer = UV::timer_init();
     UV::timer_start($timeout_timer, 200, 0, sub {
         UV::close($count_timer);
+        UV::close($timeout_timer);
     });
 
     UV::run();
 
+    is scalar(@{UV::handles()}), 0;
     is scalar(@{$handles}), 2;
     is scalar(@{$handles->[0]}), 4;
     is_deeply $handles->[0]->[0], { ref => 1, active => 1, type => UV::TIMER(), closing => 0 };

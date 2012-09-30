@@ -6,6 +6,9 @@ our $VERSION = '0.1';
 
 XSLoader::load __PACKAGE__, $VERSION;
 
+use constant READABLE => 1;
+use constant WRITABLE => 2;
+
 1;
 
 __END__
