@@ -518,7 +518,7 @@ static void walk_cb(uv_handle_t* handle, void* arg) {
     HV* hv;
     dSP;
 
-    hv = newHV();
+    hv = (HV*)sv_2mortal((SV*)newHV());
     hv_store(hv, "type", 4, newSViv(handle->type), 0); /* type */
     hv_store(hv, "active", 6, newSViv((handle->flags & UV__HANDLE_ACTIVE) ? 1 : 0), 0);
     hv_store(hv, "ref", 3, newSViv((handle->flags & UV__HANDLE_REF) ? 1 : 0), 0);
