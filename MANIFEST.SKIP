@@ -13,3 +13,9 @@
 ^\.git/
 ^\.shipit$
 \.gitignore$
+\.gitmodules$
+^tools/
+^\.travis\.yml$
+^deps/libuv/\.
+^test\.pl$
+^*.bs$
