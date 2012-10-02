@@ -750,6 +750,7 @@ BOOT:
 
     /* handle type */
     UV_HANDLE_TYPE_MAP(UV_CONST_GEN);
+    newCONSTSUB(stash, "_CHECK", newSViv(UV_CHECK)); /* XXX */
 
     /* req type */
     UV_REQ_TYPE_MAP(UV_CONST_GEN);
@@ -1705,3 +1706,15 @@ CODE:
 }
 OUTPUT:
     RETVAL
+
+MODULE=UV PACKAGE=UV::handle
+
+int
+type(uv_handle_t* handle)
+CODE:
+{
+    RETVAL = handle->type;
+}
+OUTPUT:
+    RETVAL
+
