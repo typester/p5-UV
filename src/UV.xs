@@ -104,15 +104,8 @@ struct p5uv_timer_s {
 #undef P5UV_HANDLE_FIELDS
 #undef P5UV_STREAM_FIELDS
 
-static SV* p5uv_handle_init(uv_handle_t* uv_handle) {
-    SV* sv;
-    HV* hv;
+static p5uv_handle_t* p5uv_handle_init(uv_handle_t* uv_handle) {
     p5uv_handle_t* p5uv_handle;
-
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    sv = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv, gv_stashpv("UV::handle", 1));
 
     switch (uv_handle->type) {
         case UV_TCP:
@@ -153,12 +146,28 @@ static SV* p5uv_handle_init(uv_handle_t* uv_handle) {
         croak("cannot allocate handle wrapper");
     }
 
-    uv_handle->data = (void*)p5uv_handle;
+    return p5uv_handle;
+}
+
+static SV* sv_handle_wrap(uv_handle_t* uv_handle) {
+    SV* sv;
+    HV* hv;
+    p5uv_handle_t* p5handle = (p5uv_handle_t*)uv_handle->data;
+
+    hv = (HV*)sv_2mortal((SV*)newHV());
+    sv = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv, gv_stashpv("UV::handle", 1));
 
     sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
     mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)uv_handle;
 
     return sv;
+}
+
+static SV* sv_handle_wrap_init(uv_handle_t* uv_handle) {
+    uv_handle->data = (void*)p5uv_handle_init(uv_handle);
+    return sv_handle_wrap(uv_handle);
 }
 
 static void shutdown_cb(uv_shutdown_t* req, int status) {
@@ -1007,7 +1016,7 @@ CODE:
         croak("cannot initialize tcp handle");
     }
 
-    ST(0) = p5uv_handle_init((uv_handle_t*)tcp);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)tcp);
     XSRETURN(1);
 }
 
@@ -1172,7 +1181,7 @@ CODE:
         croak("cannot initialize udp handle");
     }
 
-    ST(0) = p5uv_handle_init((uv_handle_t*)udp);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)udp);
     XSRETURN(1);
 }
 
@@ -1340,7 +1349,7 @@ CODE:
         croak("cannot initialize tty handle");
     }
 
-    ST(0) = p5uv_handle_init((uv_handle_t*)tty);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)tty);
     XSRETURN(1);
 }
 
@@ -1384,7 +1393,7 @@ CODE:
         croak("cannot initialize poll handle");
     }
 
-    ST(0) = p5uv_handle_init((uv_handle_t*)poll);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)poll);
     XSRETURN(1);
 }
 
@@ -1421,7 +1430,7 @@ CODE:
         croak("cannot initialize pipe handle");
     }
 
-    ST(0) = p5uv_handle_init((uv_handle_t*)pipe);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)pipe);
     XSRETURN(1);
 }
 
@@ -1461,7 +1470,7 @@ CODE:
         croak("cannot initialize prepare handle");
     }
 
-    ST(0) = p5uv_handle_init((uv_handle_t*)prepare);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)prepare);
     XSRETURN(1);
 }
 
@@ -1497,7 +1506,7 @@ CODE:
         croak("cannot initialize check handle");
     }
 
-    ST(0) = p5uv_handle_init((uv_handle_t*)check);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)check);
     XSRETURN(1);
 }
 
@@ -1533,7 +1542,7 @@ CODE:
         croak("cannot initialize idle handle");
     }
 
-    ST(0) = p5uv_handle_init((uv_handle_t*)idle);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)idle);
     XSRETURN(1);
 }
 
@@ -1571,7 +1580,7 @@ CODE:
         croak("cannot initialize async handle");
     }
 
-    sv_async = p5uv_handle_init((uv_handle_t*)async);
+    sv_async = sv_handle_wrap_init((uv_handle_t*)async);
 
     p5async = (p5uv_async_t*)async->data;
     p5async->cb = SvREFCNT_inc(cb);
@@ -1597,7 +1606,7 @@ CODE:
         croak("cannot initialize timer handle");
     }
 
-    ST(0) = p5uv_handle_init((uv_handle_t*)timer);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)timer);
     XSRETURN(1);
 }
 
