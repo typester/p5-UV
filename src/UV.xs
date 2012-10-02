@@ -759,6 +759,25 @@ BOOT:
 }
 
 void
+uv_default_loop()
+CODE:
+{
+    SV* sv;
+    HV* hv;
+
+    hv = (HV*)sv_2mortal((SV*)newHV());
+    sv = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv, gv_stashpv("UV::loop", 1));
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)uv_default_loop();
+
+    ST(0) = sv;
+    XSRETURN(1);
+}
+
+void
 uv_run()
 CODE:
 {
@@ -1655,3 +1674,25 @@ CODE:
 OUTPUT:
     RETVAL
 
+MODULE=UV PACKAGE=UV::loop
+
+unsigned int
+active_handles(SV* sv_loop)
+CODE:
+{
+    MAGIC* m;
+
+    if (!SvROK(sv_loop)) {
+        croak("Usage: UV::default_loop->active_handles");
+    }
+
+    m = mg_find(SvRV(sv_loop), PERL_MAGIC_ext);
+    if (!m) {
+        croak("invalid UV::loop object");
+    }
+
+    uv_loop_t* loop = (uv_loop_t*)m->mg_obj;
+    RETVAL = loop->active_handles;
+}
+OUTPUT:
+    RETVAL
