@@ -16,17 +16,150 @@
 #define UV_CONST_GEN(uc, lc) \
     newCONSTSUB(stash, #uc, newSViv(UV_##uc));
 
-typedef struct {
-    SV* connection_cb;
-    SV* connect_cb;
-    SV* read_cb;
-    SV* write_cb;
+/* Handle wrappers */
+typedef struct p5uv_handle_s p5uv_handle_t;
+typedef struct p5uv_stream_s p5uv_stream_t;
+typedef struct p5uv_tcp_s p5uv_tcp_t;
+typedef struct p5uv_udp_s p5uv_udp_t;
+typedef struct p5uv_pipe_s p5uv_pipe_t;
+typedef struct p5uv_tty_s p5uv_tty_t;
+typedef struct p5uv_poll_s p5uv_poll_t;
+typedef struct p5uv_timer_s p5uv_timer_t;
+typedef struct p5uv_prepare_s p5uv_prepare_t;
+typedef struct p5uv_check_s p5uv_check_t;
+typedef struct p5uv_idle_s p5uv_idle_t;
+typedef struct p5uv_async_s p5uv_async_t;
+
+#define P5UV_HANDLE_FIELDS \
+    uv_handle_t* handle;   \
+    SV* close_cb;
+
+struct p5uv_handle_s {
+    P5UV_HANDLE_FIELDS
+};
+
+#define P5UV_STREAM_FIELDS \
+    SV* read_cb;           \
+    SV* write_cb;          \
+    SV* connect_cb;        \
+    SV* connection_cb;     \
     SV* shutdown_cb;
-} cb_pair_t;
+
+struct p5uv_stream_s {
+    P5UV_HANDLE_FIELDS
+    P5UV_STREAM_FIELDS
+};
+
+struct p5uv_tcp_s {
+    P5UV_HANDLE_FIELDS
+    P5UV_STREAM_FIELDS
+};
+
+struct p5uv_udp_s {
+    P5UV_HANDLE_FIELDS
+    SV* send_cb;
+    SV* recv_cb;
+};
+
+struct p5uv_tty_s {
+    P5UV_HANDLE_FIELDS
+    P5UV_STREAM_FIELDS
+};
+
+struct p5uv_pipe_s {
+    P5UV_HANDLE_FIELDS
+    P5UV_STREAM_FIELDS
+};
+
+struct p5uv_poll_s {
+    P5UV_HANDLE_FIELDS
+    SV* cb;
+};
+
+struct p5uv_prepare_s {
+    P5UV_HANDLE_FIELDS
+    SV* cb;
+};
+
+struct p5uv_check_s {
+    P5UV_HANDLE_FIELDS
+    SV* cb;
+};
+
+struct p5uv_idle_s {
+    P5UV_HANDLE_FIELDS
+    SV* cb;
+};
+
+struct p5uv_async_s {
+    P5UV_HANDLE_FIELDS
+    SV* cb;
+};
+
+struct p5uv_timer_s {
+    P5UV_HANDLE_FIELDS
+    SV* cb;
+};
+
+#undef P5UV_HANDLE_FIELDS
+#undef P5UV_STREAM_FIELDS
+
+static SV* p5uv_handle_init(uv_handle_t* uv_handle) {
+    SV* sv;
+    HV* hv;
+    p5uv_handle_t* p5uv_handle;
+
+    hv = (HV*)sv_2mortal((SV*)newHV());
+    sv = sv_2mortal(newRV_inc((SV*)hv));
+
+    sv_bless(sv, gv_stashpv("UV::handle", 1));
+
+    switch (uv_handle->type) {
+        case UV_TCP:
+            Newxz(p5uv_handle, 1, p5uv_tcp_t);
+            break;
+        case UV_UDP:
+            Newxz(p5uv_handle, 1, p5uv_udp_t);
+            break;
+        case UV_TTY:
+            Newxz(p5uv_handle, 1, p5uv_tty_t);
+            break;
+        case UV_NAMED_PIPE:
+            Newxz(p5uv_handle, 1, p5uv_pipe_t);
+            break;
+        case UV_POLL:
+            Newxz(p5uv_handle, 1, p5uv_poll_t);
+            break;
+        case UV_PREPARE:
+            Newxz(p5uv_handle, 1, p5uv_prepare_t);
+            break;
+        case UV_CHECK:
+            Newxz(p5uv_handle, 1, p5uv_check_t);
+            break;
+        case UV_IDLE:
+            Newxz(p5uv_handle, 1, p5uv_idle_t);
+            break;
+        case UV_ASYNC:
+            Newxz(p5uv_handle, 1, p5uv_async_t);
+            break;
+        case UV_TIMER:
+            Newxz(p5uv_handle, 1, p5uv_timer_t);
+            break;
+        default:
+            croak("Unknown handle type: %d", uv_handle->type);
+    }
+
+    uv_handle->data = (void*)p5uv_handle;
+
+    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
+    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)uv_handle;
+
+    return sv;
+}
 
 static void shutdown_cb(uv_shutdown_t* req, int status) {
     uv_stream_t* stream = req->handle;
-    cb_pair_t* cb_pair = (cb_pair_t*)stream->data;
+    p5uv_stream_t* p5stream = (p5uv_stream_t*)stream->data;
     SV* sv_status;
     dSP;
 
@@ -39,7 +172,7 @@ static void shutdown_cb(uv_shutdown_t* req, int status) {
     XPUSHs(sv_status);
     PUTBACK;
 
-    call_sv(cb_pair->shutdown_cb, G_SCALAR);
+    call_sv(p5stream->shutdown_cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -51,36 +184,81 @@ static void shutdown_cb(uv_shutdown_t* req, int status) {
 }
 
 static void close_cb(uv_handle_t* handle) {
-    cb_pair_t* pair;
+    p5uv_handle_t* p5handle;
+    p5uv_stream_t* p5stream;
+    p5uv_udp_t* p5udp;
+    p5uv_poll_t* p5poll;
+    dSP;
 
-    if (UV_TIMER   == handle->type || UV_IDLE == handle->type
-     || UV_PREPARE == handle->type || UV_CHECK == handle->type
-     || UV_ASYNC   == handle->type || UV_POLL == handle->type)
-    {
-        if (NULL != handle->data) {
-            SvREFCNT_dec((SV*)handle->data);
-        }
-    }
-    else {
-        pair = (cb_pair_t*)handle->data;
-        if (NULL != pair->connection_cb)
-            SvREFCNT_dec(pair->connection_cb);
-        if (NULL != pair->connect_cb)
-            SvREFCNT_dec(pair->connect_cb);
-        if (NULL != pair->read_cb)
-            SvREFCNT_dec(pair->read_cb);
-        if (NULL != pair->write_cb)
-            SvREFCNT_dec(pair->write_cb);
-        free(pair);
+    p5handle = (p5uv_handle_t*)handle->data;
+
+    if (p5handle->close_cb) {
+        ENTER;
+        SAVETMPS;
+
+        PUSHMARK(SP);
+        PUTBACK;
+
+        call_sv(p5handle->close_cb, G_SCALAR);
+
+        SPAGAIN;
+
+        PUTBACK;
+        FREETMPS;
+        LEAVE;
+
+        SvREFCNT_dec(p5handle->close_cb);
     }
 
-    free(handle);
+    switch (handle->type) {
+        case UV_TCP:
+        case UV_TTY:
+        case UV_NAMED_PIPE:
+            /* stream */
+            p5stream = (p5uv_stream_t*)p5handle;
+            if (NULL != p5stream->read_cb)
+                SvREFCNT_dec(p5stream->read_cb);
+            if (NULL != p5stream->write_cb)
+                SvREFCNT_dec(p5stream->write_cb);
+            if (NULL != p5stream->connect_cb)
+                SvREFCNT_dec(p5stream->connect_cb);
+            if (NULL != p5stream->connection_cb)
+                SvREFCNT_dec(p5stream->connection_cb);
+            if (NULL != p5stream->shutdown_cb)
+                SvREFCNT_dec(p5stream->shutdown_cb);
+            break;
+
+        case UV_UDP:
+            p5udp = (p5uv_udp_t*)p5handle;
+            if (NULL != p5udp->send_cb)
+                SvREFCNT_dec(p5udp->send_cb);
+            if (NULL != p5udp->recv_cb)
+                SvREFCNT_dec(p5udp->recv_cb);
+            break;
+
+        case UV_POLL:
+        case UV_PREPARE:
+        case UV_CHECK:
+        case UV_IDLE:
+        case UV_ASYNC:
+        case UV_TIMER:
+            /* simple cb handles */
+            p5poll = (p5uv_poll_t*)p5handle;
+            if (NULL != p5poll->cb)
+                SvREFCNT_dec(p5poll->cb);
+            break;
+
+        default:
+            croak("unknown handle type: %d", handle->type);
+    }
+
+    Safefree(handle);
 }
 
 static void poll_cb(uv_poll_t* handle, int status, int events) {
-    SV* cb;
     SV* sv_status;
     SV* sv_events;
+    p5uv_poll_t* p5poll = (p5uv_poll_t*)handle->data;
 
     dSP;
 
@@ -95,8 +273,7 @@ static void poll_cb(uv_poll_t* handle, int status, int events) {
     XPUSHs(sv_events);
     PUTBACK;
 
-    cb = (SV*)handle->data;
-    call_sv(cb, G_SCALAR);
+    call_sv(p5poll->cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -106,7 +283,7 @@ static void poll_cb(uv_poll_t* handle, int status, int events) {
 }
 
 static void connection_cb(uv_stream_t* server, int status) {
-    SV* cb;
+    p5uv_stream_t* p5stream = (p5uv_stream_t*)server->data;
 
     dSP;
 
@@ -118,9 +295,7 @@ static void connection_cb(uv_stream_t* server, int status) {
 
     assert(0 == status);
 
-    cb = ((cb_pair_t*)server->data)->connection_cb;
-
-    call_sv(cb, G_SCALAR);
+    call_sv(p5stream->connection_cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -145,7 +320,7 @@ static void connect_cb(uv_connect_t* req, int status) {
     XPUSHs(sv_status);
     PUTBACK;
 
-    cb = ((cb_pair_t*)stream->data)->connect_cb;
+    cb = ((p5uv_stream_t*)stream->data)->connect_cb;
 
     call_sv(cb, G_SCALAR);
 
@@ -155,22 +330,24 @@ static void connect_cb(uv_connect_t* req, int status) {
     FREETMPS;
     LEAVE;
 
-    free(req);
+    Safefree(req);
 }
 
 static uv_buf_t alloc_cb(uv_handle_t* handle, size_t suggested_size) {
     char* buf;
 
     buf = (char*)malloc(suggested_size);
-    assert(buf);
+    if (NULL == buf) {
+        croak("cannot allocate buffer");
+    }
 
     return uv_buf_init(buf, suggested_size);
 }
 
 static void read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
-    SV* cb;
     SV* sv_nread;
     SV* sv_buf;
+    p5uv_stream_t* p5stream = (p5uv_stream_t*)stream->data;
 
     dSP;
 
@@ -190,9 +367,7 @@ static void read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
     XPUSHs(sv_buf);
     PUTBACK;
 
-    cb = ((cb_pair_t*)stream->data)->read_cb;
-
-    call_sv(cb, G_SCALAR);
+    call_sv(p5stream->read_cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -204,10 +379,10 @@ static void read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
 }
 
 static void read2_cb(uv_pipe_t* pipe, ssize_t nread, uv_buf_t buf, uv_handle_type pending) {
-    SV* cb;
     SV* sv_nread;
     SV* sv_buf;
     SV* sv_pending;
+    p5uv_stream_t* p5stream = (p5uv_stream_t*)pipe->data;
 
     dSP;
 
@@ -229,9 +404,7 @@ static void read2_cb(uv_pipe_t* pipe, ssize_t nread, uv_buf_t buf, uv_handle_typ
     XPUSHs(sv_pending);
     PUTBACK;
 
-    cb = ((cb_pair_t*)pipe->data)->read_cb;
-
-    call_sv(cb, G_SCALAR);
+    call_sv(p5stream->read_cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -244,13 +417,12 @@ static void read2_cb(uv_pipe_t* pipe, ssize_t nread, uv_buf_t buf, uv_handle_typ
 
 static void write_cb(uv_write_t* req, int status){
     uv_stream_t* stream = req->handle;
-    cb_pair_t* cb_pair  = (cb_pair_t*)stream->data;
+    p5uv_stream_t* p5stream = (p5uv_stream_t*)stream->data;
     SV* sv_status;
-    SV* cb;
 
     dSP;
 
-    if (cb_pair->write_cb) {
+    if (p5stream->write_cb) {
         ENTER;
         SAVETMPS;
 
@@ -260,9 +432,7 @@ static void write_cb(uv_write_t* req, int status){
         XPUSHs(sv_status);
         PUTBACK;
 
-        cb = ((cb_pair_t*)stream->data)->write_cb;
-
-        call_sv(cb, G_SCALAR);
+        call_sv(p5stream->write_cb, G_SCALAR);
 
         SPAGAIN;
 
@@ -271,16 +441,16 @@ static void write_cb(uv_write_t* req, int status){
         LEAVE;
     }
 
-    free(req);
+    Safefree(req);
 }
 
 static void send_cb(uv_udp_send_t* req, int status) {
-    uv_udp_t* udp      = req->handle;
-    cb_pair_t* cb_pair = (cb_pair_t*)udp->data;
+    uv_udp_t* udp     = req->handle;
+    p5uv_udp_t* p5udp = (p5uv_udp_t*)udp->data;
     SV* sv_status;
     dSP;
 
-    if (cb_pair->write_cb) {
+    if (p5udp->send_cb) {
         ENTER;
         SAVETMPS;
 
@@ -290,7 +460,7 @@ static void send_cb(uv_udp_send_t* req, int status) {
         XPUSHs(sv_status);
         PUTBACK;
 
-        call_sv(cb_pair->write_cb, G_SCALAR);
+        call_sv(p5udp->send_cb, G_SCALAR);
 
         SPAGAIN;
 
@@ -299,7 +469,7 @@ static void send_cb(uv_udp_send_t* req, int status) {
         LEAVE;
     }
 
-    free(req);
+    Safefree(req);
 }
 
 static void recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
@@ -313,6 +483,7 @@ static void recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
     struct sockaddr_in* addrin;
     struct sockaddr_in6* addrin6;
     char ip[INET6_ADDRSTRLEN];
+    p5uv_udp_t* p5udp = (p5uv_udp_t*)handle->data;
     dSP;
 
     ENTER;
@@ -363,7 +534,7 @@ static void recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
     XPUSHs(sv_flags);
     PUTBACK;
 
-    call_sv(((cb_pair_t*)handle->data)->read_cb, G_SCALAR);
+    call_sv(p5udp->recv_cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -375,8 +546,8 @@ static void recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
 }
 
 static void prepare_cb(uv_prepare_t* handle, int status) {
-    SV* cb = (SV*)handle->data;
     SV* sv_status;
+    p5uv_prepare_t* p5prepare = (p5uv_prepare_t*)handle->data;
     dSP;
 
     sv_status = sv_2mortal(newSViv(status));
@@ -388,7 +559,7 @@ static void prepare_cb(uv_prepare_t* handle, int status) {
     XPUSHs(sv_status);
     PUTBACK;
 
-    call_sv(cb, G_SCALAR);
+    call_sv(p5prepare->cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -398,8 +569,8 @@ static void prepare_cb(uv_prepare_t* handle, int status) {
 }
 
 static void check_cb(uv_check_t* handle, int status) {
-    SV* cb = (SV*)handle->data;
     SV* sv_status;
+    p5uv_check_t* p5check = (p5uv_check_t*)handle->data;
     dSP;
 
     sv_status = sv_2mortal(newSViv(status));
@@ -411,7 +582,7 @@ static void check_cb(uv_check_t* handle, int status) {
     XPUSHs(sv_status);
     PUTBACK;
 
-    call_sv(cb, G_SCALAR);
+    call_sv(p5check->cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -421,8 +592,8 @@ static void check_cb(uv_check_t* handle, int status) {
 }
 
 static void idle_cb(uv_idle_t* handle, int status) {
-    SV* cb;
     SV* sv_status;
+    p5uv_idle_t* p5idle = (p5uv_idle_t*)handle->data;
 
     dSP;
 
@@ -435,9 +606,7 @@ static void idle_cb(uv_idle_t* handle, int status) {
     XPUSHs(sv_status);
     PUTBACK;
 
-    cb = (SV*)handle->data;
-
-    call_sv(cb, G_SCALAR);
+    call_sv(p5idle->cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -447,8 +616,8 @@ static void idle_cb(uv_idle_t* handle, int status) {
 }
 
 static void async_cb(uv_async_t* handle, int status) {
-    SV* cb;
     SV* sv_status;
+    p5uv_async_t* p5async = (p5uv_async_t*)handle->data;
 
     dSP;
 
@@ -461,9 +630,7 @@ static void async_cb(uv_async_t* handle, int status) {
     XPUSHs(sv_status);
     PUTBACK;
 
-    cb = (SV*)handle->data;
-
-    call_sv(cb, G_SCALAR);
+    call_sv(p5async->cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -473,8 +640,8 @@ static void async_cb(uv_async_t* handle, int status) {
 }
 
 static void timer_cb(uv_timer_t* handle, int status) {
-    SV* cb;
     SV* sv_status;
+    p5uv_timer_t* p5timer = (p5uv_timer_t*)handle->data;
 
     dSP;
 
@@ -487,9 +654,7 @@ static void timer_cb(uv_timer_t* handle, int status) {
     XPUSHs(sv_status);
     PUTBACK;
 
-    cb = (SV*)handle->data;
-
-    call_sv(cb, G_SCALAR);
+    call_sv(p5timer->cb, G_SCALAR);
 
     SPAGAIN;
 
@@ -555,7 +720,7 @@ static void getaddrinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo
 
     uv_freeaddrinfo(res);
     SvREFCNT_dec(handle->data);
-    free(handle);
+    Safefree(handle);
 }
 
 MODULE=UV PACKAGE=UV PREFIX=uv_
@@ -653,16 +818,15 @@ uv_shutdown(uv_stream_t* handle, SV* cb)
 CODE:
 {
     uv_shutdown_t* req;
-    cb_pair_t* cb_pair;
+    p5uv_stream_t* p5stream;
 
-    req = (uv_shutdown_t*)malloc(sizeof(uv_shutdown_t));
-    assert(req);
+    Newx(req, 1, uv_shutdown_t);
 
-    cb_pair = (cb_pair_t*)handle->data;
+    p5stream = (p5uv_stream_t*)handle->data;
 
-    if (cb_pair->shutdown_cb)
-        SvREFCNT_dec(cb_pair->shutdown_cb);
-    cb_pair->shutdown_cb = SvREFCNT_inc(cb);
+    if (p5stream->shutdown_cb)
+        SvREFCNT_dec(p5stream->shutdown_cb);
+    p5stream->shutdown_cb = SvREFCNT_inc(cb);
 
     RETVAL = uv_shutdown(req, handle, shutdown_cb);
 }
@@ -693,11 +857,11 @@ int
 uv_listen(uv_stream_t* stream, int backlog, SV* cb)
 CODE:
 {
-    cb_pair_t* cb_pair = (cb_pair_t*)stream->data;
+    p5uv_stream_t* p5stream = (p5uv_stream_t*)stream->data;
 
-    if (cb_pair->connection_cb)
-        SvREFCNT_dec(cb_pair->connection_cb);
-    cb_pair->connection_cb = SvREFCNT_inc(cb);
+    if (p5stream->connection_cb)
+        SvREFCNT_dec(p5stream->connection_cb);
+    p5stream->connection_cb = SvREFCNT_inc(cb);
 
     RETVAL = uv_listen(stream, backlog, connection_cb);
 }
@@ -711,11 +875,11 @@ int
 uv_read_start(uv_stream_t* stream, SV* cb)
 CODE:
 {
-    cb_pair_t* cb_pair = (cb_pair_t*)stream->data;
+    p5uv_stream_t* p5stream = (p5uv_stream_t*)stream->data;
 
-    if (cb_pair->read_cb)
-        SvREFCNT_dec(cb_pair->read_cb);
-    cb_pair->read_cb = SvREFCNT_inc(cb);
+    if (p5stream->read_cb)
+        SvREFCNT_dec(p5stream->read_cb);
+    p5stream->read_cb = SvREFCNT_inc(cb);
 
     RETVAL = uv_read_start(stream, alloc_cb, read_cb);
 }
@@ -729,11 +893,11 @@ int
 uv_read2_start(uv_stream_t* stream, SV* cb)
 CODE:
 {
-    cb_pair_t* cb_pair = (cb_pair_t*)stream->data;
+    p5uv_stream_t* p5stream = (p5uv_stream_t*)stream;
 
-    if (cb_pair->read_cb)
-        SvREFCNT_dec(cb_pair->read_cb);
-    cb_pair->read_cb = SvREFCNT_inc(cb);
+    if (p5stream->read_cb)
+        SvREFCNT_dec(p5stream->read_cb);
+    p5stream->read_cb = SvREFCNT_inc(cb);
 
     RETVAL = uv_read2_start(stream, alloc_cb, read2_cb);
 }
@@ -744,25 +908,23 @@ int
 uv_write(uv_stream_t* stream, SV* sv_buf, SV* cb = NULL)
 CODE:
 {
-    cb_pair_t* cb_pair = (cb_pair_t*)stream->data;
+    p5uv_stream_t* p5stream = (p5uv_stream_t*)stream->data;
     char* buf;
     STRLEN len;
     uv_write_t* req;
     uv_buf_t b;
 
-    if (cb_pair->write_cb) {
-        SvREFCNT_dec(cb_pair->write_cb);
-        cb_pair->write_cb = NULL;
+    if (p5stream->write_cb) {
+        SvREFCNT_dec(p5stream->write_cb);
+        p5stream->write_cb = NULL;
     }
 
     if (cb)
-        cb_pair->write_cb = SvREFCNT_inc(cb);
+        p5stream->write_cb = SvREFCNT_inc(cb);
 
-    req = (uv_write_t*)malloc(sizeof(uv_write_t));
-    assert(req);
+    Newx(req, 1, uv_write_t);
 
     buf = SvPV(sv_buf, len);
-
     b = uv_buf_init(buf, len);
 
     RETVAL = uv_write(req, stream, &b, 1, write_cb);
@@ -774,25 +936,24 @@ int
 uv_write2(uv_stream_t* stream, SV* sv_buf, uv_stream_t* send_stream, SV* cb = NULL)
 CODE:
 {
-    cb_pair_t* cb_pair = (cb_pair_t*)stream->data;
+    p5uv_stream_t* p5stream = (p5uv_stream_t*)stream->data;
     char* buf;
     STRLEN len;
     uv_write_t* req;
     uv_buf_t b;
 
-    if (cb_pair->write_cb) {
-        SvREFCNT_dec(cb_pair->write_cb);
-        cb_pair->write_cb = NULL;
+    if (p5stream->write_cb) {
+        SvREFCNT_dec(p5stream->write_cb);
+        p5stream->write_cb = NULL;
     }
 
     if (cb)
-        cb_pair->write_cb = SvREFCNT_inc(cb);
+        p5stream->write_cb = SvREFCNT_inc(cb);
 
-    req = (uv_write_t*)malloc(sizeof(uv_write_t));
-    assert(req);
+    Newx(req, 1, uv_write_t);
 
     buf = SvPV(sv_buf, len);
-    b   = uv_buf_init(buf, len);
+    b = uv_buf_init(buf, len);
 
     RETVAL = uv_write2(req, stream, &b, 1, send_stream, write_cb);
 }
@@ -812,28 +973,18 @@ void
 uv_tcp_init()
 CODE:
 {
-    SV* sv_tcp;
     uv_tcp_t* tcp;
-    HV* hv;
     int r;
 
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    sv_tcp = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_tcp, gv_stashpv("UV::tcp", 1));
-
-    tcp = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
-    assert(tcp);
+    Newx(tcp, 1, uv_tcp_t);
 
     r = uv_tcp_init(uv_default_loop(), tcp);
-    assert(0 == r);
+    if (r) {
+        croak("cannot initialize tcp handle");
+    }
 
-    tcp->data = (void*)calloc(1, sizeof(cb_pair_t));
-
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)tcp;
-
-    ST(0) = sv_tcp;
+    ST(0) = p5uv_handle_init((uv_handle_t*)tcp);
+    XSRETURN(1);
 }
 
 int
@@ -952,14 +1103,13 @@ uv_tcp_connect(uv_tcp_t* tcp, const char* ip, int port, SV* cb)
 CODE:
 {
     uv_connect_t* req;
-    cb_pair_t* cb_pair = (cb_pair_t*)tcp->data;
+    p5uv_tcp_t* p5tcp = (p5uv_tcp_t*)tcp->data;
 
-    if (cb_pair->connect_cb)
-        SvREFCNT_dec(cb_pair->connect_cb);
-    cb_pair->connect_cb = SvREFCNT_inc(cb);
+    if (p5tcp->connect_cb)
+        SvREFCNT_dec(p5tcp->connect_cb);
+    p5tcp->connect_cb = SvREFCNT_inc(cb);
 
-    req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-    assert(req);
+    Newx(req, 1, uv_connect_t);
 
     RETVAL = uv_tcp_connect(req, tcp, uv_ip4_addr(ip, port), connect_cb);
 }
@@ -971,14 +1121,13 @@ uv_tcp_connect6(uv_tcp_t* tcp, const char* ip, int port, SV* cb)
 CODE:
 {
     uv_connect_t* req;
-    cb_pair_t* cb_pair = (cb_pair_t*)tcp->data;
+    p5uv_tcp_t* p5tcp = (p5uv_tcp_t*)tcp->data;
 
-    if (cb_pair->connect_cb)
-        SvREFCNT_dec(cb_pair->connect_cb);
-    cb_pair->connect_cb = SvREFCNT_inc(cb);
+    if (p5tcp->connect_cb)
+        SvREFCNT_dec(p5tcp->connect_cb);
+    p5tcp->connect_cb = SvREFCNT_inc(cb);
 
-    req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-    assert(req);
+    Newx(req, 1, uv_connect_t);
 
     RETVAL = uv_tcp_connect6(req, tcp, uv_ip6_addr(ip, port), connect_cb);
 }
@@ -989,28 +1138,18 @@ void
 uv_udp_init()
 CODE:
 {
-    SV* sv_udp;
     uv_udp_t* udp;
-    HV* hv;
     int r;
 
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    sv_udp = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_udp, gv_stashpv("UV::udp", 1));
-
-    udp = (uv_udp_t*)malloc(sizeof(uv_udp_t));
-    assert(udp);
+    Newx(udp, 1, uv_udp_t);
 
     r = uv_udp_init(uv_default_loop(), udp);
-    assert(0 == r);
+    if (r) {
+        croak("cannot initialize udp handle");
+    }
 
-    udp->data = (void*)calloc(1, sizeof(cb_pair_t));
-
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)udp;
-
-    ST(0) = sv_udp;
+    ST(0) = p5uv_handle_init((uv_handle_t*)udp);
+    XSRETURN(1);
 }
 
 int
@@ -1091,19 +1230,22 @@ int
 uv_udp_send(uv_udp_t* udp, SV* sv_buf, const char* ip, int port, SV* cb = NULL)
 CODE:
 {
-    cb_pair_t* cb_pair = (cb_pair_t*)udp->data;
+    p5uv_udp_t* p5udp = (p5uv_udp_t*)udp->data;
     char* buf;
     STRLEN len;
     uv_udp_send_t* req;
     uv_buf_t b;
 
-    if (cb_pair->write_cb)
-        SvREFCNT_dec(cb_pair->write_cb);
-    if (cb)
-        cb_pair->write_cb = SvREFCNT_inc(cb);
+    if (p5udp->send_cb) {
+        SvREFCNT_dec(p5udp->send_cb);
+        p5udp->send_cb = NULL;
+    }
 
-    req = (uv_udp_send_t*)malloc(sizeof(uv_udp_send_t));
-    assert(req);
+    if (cb) {
+        p5udp->send_cb = SvREFCNT_inc(cb);
+    }
+
+    Newx(req, 1, uv_udp_send_t);
 
     buf = SvPV(sv_buf, len);
     b   = uv_buf_init(buf, len);
@@ -1117,19 +1259,22 @@ int
 uv_udp_send6(uv_udp_t* udp, SV* sv_buf, const char* ip, int port, SV* cb = NULL)
 CODE:
 {
-    cb_pair_t* cb_pair = (cb_pair_t*)udp->data;
+    p5uv_udp_t* p5udp = (p5uv_udp_t*)udp->data;
     char* buf;
     STRLEN len;
     uv_udp_send_t* req;
     uv_buf_t b;
 
-    if (cb_pair->write_cb)
-        SvREFCNT_dec(cb_pair->write_cb);
-    if (cb)
-        cb_pair->write_cb = SvREFCNT_inc(cb);
+    if (p5udp->send_cb) {
+        SvREFCNT_dec(p5udp->send_cb);
+        p5udp->send_cb = NULL;
+    }
 
-    req = (uv_udp_send_t*)malloc(sizeof(uv_udp_send_t));
-    assert(req);
+    if (cb) {
+        p5udp->send_cb = SvREFCNT_inc(cb);
+    }
+
+    Newx(req, 1, uv_udp_send_t);
 
     buf = SvPV(sv_buf, len);
     b   = uv_buf_init(buf, len);
@@ -1143,11 +1288,11 @@ int
 uv_udp_recv_start(uv_udp_t* udp, SV* cb)
 CODE:
 {
-    cb_pair_t* cb_pair = (cb_pair_t*)udp->data;
+    p5uv_udp_t* p5udp = (p5uv_udp_t*)udp->data;
 
-    if (cb_pair->read_cb)
-        SvREFCNT_dec(cb_pair->read_cb);
-    cb_pair->read_cb = SvREFCNT_inc(cb);
+    if (p5udp->recv_cb)
+        SvREFCNT_dec(p5udp->recv_cb);
+    p5udp->recv_cb = SvREFCNT_inc(cb);
 
     RETVAL = uv_udp_recv_start(udp, alloc_cb, recv_cb);
 }
@@ -1161,29 +1306,17 @@ void
 uv_tty_init(int fd, int readable)
 CODE:
 {
-    SV* sv_tty;
     uv_tty_t* tty;
-    HV* hv;
     int r;
 
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    sv_tty = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_tty, gv_stashpv("UV::tty", 1));
-
-    tty = (uv_tty_t*)malloc(sizeof(uv_tty_t));
-    assert(tty);
+    Newx(tty, 1, uv_tty_t);
 
     r = uv_tty_init(uv_default_loop(), tty, fd, readable);
-    assert(0 == r);
+    if (r) {
+        croak("cannot initialize tty handle");
+    }
 
-    tty->data = (void*)calloc(1, sizeof(cb_pair_t));
-    assert(tty->data);
-
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)tty;
-
-    ST(0) = sv_tty;
+    ST(0) = p5uv_handle_init((uv_handle_t*)tty);
     XSRETURN(1);
 }
 
@@ -1217,32 +1350,17 @@ void
 uv_poll_init(int fd)
 CODE:
 {
-    SV* sv_poll;
     uv_poll_t* poll;
-    HV* hv;
     int r;
 
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    sv_poll = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_poll, gv_stashpv("UV::poll", 1));
-
-    poll = (uv_poll_t*)malloc(sizeof(uv_poll_t));
-    if (NULL == poll) {
-        croak("cannot allocate memory");
-    }
+    Newx(poll, 1, uv_poll_t);
 
     r = uv_poll_init(uv_default_loop(), poll, fd);
     if (r) {
-        croak("cannot allocate uv_poll object");
+        croak("cannot initialize poll handle");
     }
 
-    poll->data = NULL;
-
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)poll;
-
-    ST(0) = sv_poll;
+    ST(0) = p5uv_handle_init((uv_handle_t*)poll);
     XSRETURN(1);
 }
 
@@ -1250,9 +1368,11 @@ int
 uv_poll_start(uv_poll_t* handle, int events, SV* cb)
 CODE:
 {
-    if (handle->data)
-        SvREFCNT_dec((SV*)handle->data);
-    handle->data = (void*)SvREFCNT_inc(cb);
+    p5uv_poll_t* p5poll = (p5uv_poll_t*)handle->data;
+
+    if (p5poll->cb)
+        SvREFCNT_dec(p5poll->cb);
+    p5poll->cb = SvREFCNT_inc(cb);
 
     RETVAL = uv_poll_start(handle, events, poll_cb);
 }
@@ -1267,28 +1387,17 @@ void
 uv_pipe_init(int ipc)
 CODE:
 {
-    SV* sv_pipe;
     uv_pipe_t* pipe;
-    HV* hv;
     int r;
 
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    sv_pipe = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_pipe, gv_stashpv("UV::pipe", 1));
-
-    pipe = (uv_pipe_t*)malloc(sizeof(uv_pipe_t));
-    assert(pipe);
+    Newx(pipe, 1, uv_pipe_t);
 
     r = uv_pipe_init(uv_default_loop(), pipe, ipc);
-    assert(0 == r);
+    if (r) {
+        croak("cannot initialize pipe handle");
+    }
 
-    pipe->data = (void*)calloc(1, sizeof(cb_pair_t));
-
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)pipe;
-
-    ST(0) = sv_pipe;
+    ST(0) = p5uv_handle_init((uv_handle_t*)pipe);
     XSRETURN(1);
 }
 
@@ -1303,14 +1412,13 @@ uv_pipe_connect(uv_pipe_t* pipe, const char* name, SV* cb)
 CODE:
 {
     uv_connect_t* req;
-    cb_pair_t* cb_pair = (cb_pair_t*)pipe->data;
+    p5uv_pipe_t* p5pipe = (p5uv_pipe_t*)pipe->data;
 
-    if (cb_pair->connect_cb)
-        SvREFCNT_dec(cb_pair->connect_cb);
-    cb_pair->connect_cb = SvREFCNT_inc(cb);
+    if (p5pipe->connect_cb)
+        SvREFCNT_dec(p5pipe->connect_cb);
+    p5pipe->connect_cb = SvREFCNT_inc(cb);
 
-    req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
-    assert(req);
+    Newx(req, 1, uv_connect_t);
 
     uv_pipe_connect(req, pipe, name, connect_cb);
 }
@@ -1319,28 +1427,17 @@ void
 uv_prepare_init()
 CODE:
 {
-    SV* sv_prepare;
     uv_prepare_t* prepare;
-    HV* hv;
     int r;
 
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    sv_prepare = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_prepare, gv_stashpv("UV::prepare", 1));
-
-    prepare = (uv_prepare_t*)malloc(sizeof(uv_prepare_t));
-    assert(prepare);
+    Newx(prepare, 1, uv_prepare_t);
 
     r = uv_prepare_init(uv_default_loop(), prepare);
-    assert(0 == r);
+    if (r) {
+        croak("cannot initialize prepare handle");
+    }
 
-    prepare->data = NULL;
-
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)prepare;
-
-    ST(0) = sv_prepare;
+    ST(0) = p5uv_handle_init((uv_handle_t*)prepare);
     XSRETURN(1);
 }
 
@@ -1348,13 +1445,11 @@ int
 uv_prepare_start(uv_prepare_t* prepare, SV* cb)
 CODE:
 {
-    if (prepare->data) {
-        SvREFCNT_dec((SV*)prepare->data);
-        prepare->data = NULL;
-    }
-    if (cb) {
-        prepare->data = (void*)SvREFCNT_inc(cb);
-    }
+    p5uv_prepare_t* p5prepare = (p5uv_prepare_t*)prepare->data;
+
+    if (p5prepare->cb)
+        SvREFCNT_dec(p5prepare->cb);
+    p5prepare->cb = SvREFCNT_inc(cb);
 
     RETVAL = uv_prepare_start(prepare, prepare_cb);
 }
@@ -1368,28 +1463,17 @@ void
 uv_check_init()
 CODE:
 {
-    SV* sv_check;
     uv_check_t* check;
-    HV* hv;
     int r;
 
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    sv_check = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_check, gv_stashpv("UV::check", 1));
-
-    check = (uv_check_t*)malloc(sizeof(uv_check_t));
-    assert(check);
+    Newx(check, 1, uv_check_t);
 
     r = uv_check_init(uv_default_loop(), check);
-    assert(0 == r);
+    if (r) {
+        croak("cannot initialize check handle");
+    }
 
-    check->data = NULL;
-
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)check;
-
-    ST(0) = sv_check;
+    ST(0) = p5uv_handle_init((uv_handle_t*)check);
     XSRETURN(1);
 }
 
@@ -1397,14 +1481,11 @@ int
 uv_check_start(uv_check_t* check, SV* cb)
 CODE:
 {
-    if (check->data) {
-        SvREFCNT_dec((SV*)check->data);
-        check->data = NULL;
-    }
+    p5uv_check_t* p5check = (p5uv_check_t*)check->data;
 
-    if (cb) {
-        check->data = SvREFCNT_inc(cb);
-    }
+    if (p5check->cb)
+        SvREFCNT_dec(p5check->cb);
+    p5check->cb = SvREFCNT_inc(cb);
 
     RETVAL = uv_check_start(check, check_cb);
 }
@@ -1418,27 +1499,17 @@ void
 uv_idle_init()
 CODE:
 {
-    SV* sv_idle;
     uv_idle_t* idle;
-    HV* hv;
     int r;
 
-    hv      = (HV*)sv_2mortal((SV*)newHV());
-    sv_idle = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_idle, gv_stashpv("UV::idle", 1));
-
-    idle = (uv_idle_t*)malloc(sizeof(uv_idle_t));
-    assert(idle);
+    Newx(idle, 1, uv_idle_t);
 
     r = uv_idle_init(uv_default_loop(), idle);
-    assert(0 == r);
-    idle->data = NULL;
+    if (r) {
+        croak("cannot initialize idle handle");
+    }
 
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)idle;
-
-    ST(0) = sv_idle;
+    ST(0) = p5uv_handle_init((uv_handle_t*)idle);
     XSRETURN(1);
 }
 
@@ -1446,9 +1517,11 @@ int
 uv_idle_start(uv_idle_t* idle, SV* cb)
 CODE:
 {
-    if (idle->data)
-        SvREFCNT_dec((SV*)idle->data);
-    idle->data = (void*)SvREFCNT_inc(cb);
+    p5uv_idle_t* p5idle = (p5uv_idle_t*)idle->data;
+
+    if (p5idle->cb)
+        SvREFCNT_dec(p5idle->cb);
+    p5idle->cb = SvREFCNT_inc(cb);
 
     RETVAL = uv_idle_start(idle, idle_cb);
 }
@@ -1464,23 +1537,20 @@ CODE:
 {
     SV* sv_async;
     uv_async_t* async;
-    HV* hv;
+    p5uv_async_t* p5async;
     int r;
 
-    hv = (HV*)sv_2mortal((SV*)newHV());
-    sv_async = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_async, gv_stashpv("UV::async", 1));
-
-    async = (uv_async_t*)malloc(sizeof(uv_async_t));
-    assert(async);
+    Newx(async, 1, uv_async_t);
 
     r = uv_async_init(uv_default_loop(), async, async_cb);
+    if (r) {
+        croak("cannot initialize async handle");
+    }
 
-    async->data = (void*)SvREFCNT_inc(cb);
+    sv_async = p5uv_handle_init((uv_handle_t*)async);
 
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)async;
+    p5async = (p5uv_async_t*)async->data;
+    p5async->cb = SvREFCNT_inc(cb);
 
     ST(0) = sv_async;
     XSRETURN(1);
@@ -1493,36 +1563,29 @@ void
 uv_timer_init()
 CODE:
 {
-    SV* sv_timer;
     uv_timer_t* timer;
-    HV* hv;
     int r;
 
-    hv       = (HV*)sv_2mortal((SV*)newHV());
-    sv_timer = sv_2mortal(newRV_inc((SV*)hv));
-
-    sv_bless(sv_timer, gv_stashpv("UV::timer", 1));
-
-    timer = (uv_timer_t*)malloc(sizeof(uv_timer_t));
-    assert(timer);
+    Newx(timer, 1, uv_timer_t);
 
     r = uv_timer_init(uv_default_loop(), timer);
-    assert(0 == r);
-    timer->data = NULL;
+    if (r) {
+        croak("cannot initialize timer handle");
+    }
 
-    sv_magic((SV*)hv, NULL, PERL_MAGIC_ext, NULL, 0);
-    mg_find((SV*)hv, PERL_MAGIC_ext)->mg_obj = (SV*)timer;
-
-    ST(0) = sv_timer;
+    ST(0) = p5uv_handle_init((uv_handle_t*)timer);
+    XSRETURN(1);
 }
 
 int
 uv_timer_start(uv_timer_t* timer, double timeout, double repeat, SV* cb)
 CODE:
 {
-    if (timer->data)
-        SvREFCNT_dec((SV*)timer->data);
-    timer->data = (void*)SvREFCNT_inc(cb);
+    p5uv_timer_t* p5timer = (p5uv_timer_t*)timer->data;
+
+    if (p5timer->cb)
+        SvREFCNT_dec(p5timer->cb);
+    p5timer->cb = SvREFCNT_inc(cb);
 
     RETVAL = uv_timer_start(timer, timer_cb, (int64_t)timeout, (int64_t)repeat);
 }
@@ -1574,8 +1637,7 @@ CODE:
             break;
     }
 
-    handle = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
-    assert(handle);
+    Newx(handle, 1, uv_getaddrinfo_t);
 
     handle->data = (void*)SvREFCNT_inc(cb);
 
