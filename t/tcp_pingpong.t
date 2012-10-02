@@ -1,13 +1,16 @@
 use strict;
 use warnings;
 use Test::More;
+use Test::TCP;
 
 use UV;
 
 my $r;
 
+my $port = empty_port();
+
 my $tcp_server = UV::tcp_init();
-$r = UV::tcp_bind($tcp_server, '0.0.0.0', 9999);
+$r = UV::tcp_bind($tcp_server, '0.0.0.0', $port);
 is $r, 0, 'bind ok';
 
 UV::listen($tcp_server, 10, sub {
@@ -41,7 +44,7 @@ UV::listen($tcp_server, 10, sub {
 });
 
 my $tcp_client = UV::tcp_init();
-UV::tcp_connect($tcp_client, "127.0.0.1", 9999, sub {
+UV::tcp_connect($tcp_client, "127.0.0.1", $port, sub {
     my ($status) = @_;
 
     is $status, 0, "connect ok";
