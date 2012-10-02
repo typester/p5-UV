@@ -14,7 +14,8 @@
     newCONSTSUB(stash, #name, newSViv(val));
 
 #define UV_CONST_GEN(uc, lc) \
-    newCONSTSUB(stash, #uc, newSViv(UV_##uc));
+    newCONSTSUB(stash, #uc, newSViv(UV_##uc));    \
+    newCONSTSUB(stash, "UV_" #uc, newSViv(UV_##uc));
 
 /* Handle wrappers */
 typedef struct p5uv_handle_s p5uv_handle_t;
@@ -750,7 +751,6 @@ BOOT:
 
     /* handle type */
     UV_HANDLE_TYPE_MAP(UV_CONST_GEN);
-    newCONSTSUB(stash, "_CHECK", newSViv(UV_CHECK)); /* XXX */
 
     /* req type */
     UV_REQ_TYPE_MAP(UV_CONST_GEN);

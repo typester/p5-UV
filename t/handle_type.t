@@ -30,7 +30,7 @@ is $prepare->type, UV::PREPARE, 'prepare type ok';
 
 my $check = UV::check_init();
 isa_ok $check, 'UV::handle';
-is $check->type, UV::_CHECK, 'check type ok';
+is $check->type, UV::UV_CHECK, 'check type ok';
 
 my $idle = UV::idle_init();
 isa_ok $idle, 'UV::handle';
