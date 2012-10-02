@@ -116,37 +116,41 @@ static SV* p5uv_handle_init(uv_handle_t* uv_handle) {
 
     switch (uv_handle->type) {
         case UV_TCP:
-            Newxz(p5uv_handle, 1, p5uv_tcp_t);
+            p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_tcp_t));
             break;
         case UV_UDP:
-            Newxz(p5uv_handle, 1, p5uv_udp_t);
+            p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_udp_t));
             break;
         case UV_TTY:
-            Newxz(p5uv_handle, 1, p5uv_tty_t);
+            p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_tty_t));
             break;
         case UV_NAMED_PIPE:
-            Newxz(p5uv_handle, 1, p5uv_pipe_t);
+            p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_pipe_t));
             break;
         case UV_POLL:
-            Newxz(p5uv_handle, 1, p5uv_poll_t);
+            p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_poll_t));
             break;
         case UV_PREPARE:
-            Newxz(p5uv_handle, 1, p5uv_prepare_t);
+            p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_prepare_t));
             break;
         case UV_CHECK:
-            Newxz(p5uv_handle, 1, p5uv_check_t);
+            p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_check_t));
             break;
         case UV_IDLE:
-            Newxz(p5uv_handle, 1, p5uv_idle_t);
+            p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_idle_t));
             break;
         case UV_ASYNC:
-            Newxz(p5uv_handle, 1, p5uv_async_t);
+            p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_async_t));
             break;
         case UV_TIMER:
-            Newxz(p5uv_handle, 1, p5uv_timer_t);
+            p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_timer_t));
             break;
         default:
             croak("Unknown handle type: %d", uv_handle->type);
+    }
+
+    if (NULL == p5uv_handle) {
+        croak("cannot allocate handle wrapper");
     }
 
     uv_handle->data = (void*)p5uv_handle;
@@ -252,7 +256,8 @@ static void close_cb(uv_handle_t* handle) {
             croak("unknown handle type: %d", handle->type);
     }
 
-    Safefree(handle);
+    free(handle);
+    Safefree(p5handle);
 }
 
 static void poll_cb(uv_poll_t* handle, int status, int events) {
