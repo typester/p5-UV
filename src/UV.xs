@@ -153,7 +153,6 @@ static p5uv_handle_t* p5uv_handle_init(uv_handle_t* uv_handle) {
 static SV* sv_handle_wrap(uv_handle_t* uv_handle) {
     SV* sv;
     HV* hv;
-    p5uv_handle_t* p5handle = (p5uv_handle_t*)uv_handle->data;
 
     hv = (HV*)sv_2mortal((SV*)newHV());
     sv = sv_2mortal(newRV_inc((SV*)hv));
@@ -350,6 +349,8 @@ static void connect_cb(uv_connect_t* req, int status) {
 
 static uv_buf_t alloc_cb(uv_handle_t* handle, size_t suggested_size) {
     char* buf;
+
+    PERL_UNUSED_ARG(handle);
 
     buf = (char*)malloc(suggested_size);
     if (NULL == buf) {
@@ -871,9 +872,20 @@ int
 uv_is_active(uv_handle_t* handle)
 
 void
-uv_close(uv_handle_t* handle)
+uv_close(uv_handle_t* handle, SV* cb = NULL)
 CODE:
 {
+    p5uv_handle_t* p5handle = (p5uv_handle_t*)handle->data;
+
+    if (p5handle->close_cb) {
+        SvREFCNT_dec(p5handle->close_cb);
+        p5handle->close_cb = NULL;
+    }
+
+    if (cb) {
+        p5handle->close_cb = SvREFCNT_inc(cb);
+    }
+
     uv_close(handle, close_cb);
 }
 
@@ -1410,6 +1422,8 @@ CODE:
 
     RETVAL = uv_poll_start(handle, events, poll_cb);
 }
+OUTPUT:
+    RETVAL
 
 int
 uv_poll_stop(uv_poll_t* handle)
