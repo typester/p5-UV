@@ -7,7 +7,7 @@ UV is perl interface to [libuv](https://github.com/joyent/libuv).
     $ git clone git://github.com/typester/p5-UV.git
     $ cd p5-UV
     $ git submodule update --init --recursive
-    $ echo -n | cpanm Module::Install::XSUtil
+    $ echo -n | cpanm Module::Install::XSUtil Module::Install::AuthorTests Module::Install::ReadmeFromPod
     $ cpanm --installdeps .
     $ make test
     $ make install
