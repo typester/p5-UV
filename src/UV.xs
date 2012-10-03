@@ -788,19 +788,23 @@ CODE:
     XSRETURN(1);
 }
 
-void
+int
 uv_run()
 CODE:
 {
-    uv_run(uv_default_loop());
+    RETVAL = uv_run(uv_default_loop());
 }
+OUTPUT:
+    RETVAL
 
-void
+int
 uv_run_once()
 CODE:
 {
-    uv_run_once(uv_default_loop());
+    RETVAL = uv_run_once(uv_default_loop());
 }
+OUTPUT:
+    RETVAL
 
 void
 uv_version()
