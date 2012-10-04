@@ -680,7 +680,7 @@ static void timer_cb(uv_timer_t* handle, int status) {
 }
 
 static void walk_cb(uv_handle_t* handle, void* arg) {
-    SV* sv_handle = SvREFCNT_inc(sv_handle_wrap(handle));
+    SV* sv_handle = sv_handle_wrap(handle);
 
     dSP;
 
@@ -900,7 +900,8 @@ void
 uv_walk(SV* cb)
 CODE:
 {
-    uv_walk(uv_default_loop(), walk_cb, cb);
+    uv_walk(uv_default_loop(), walk_cb, SvREFCNT_inc(cb));
+    SvREFCNT_dec(cb);
 }
 
 void
