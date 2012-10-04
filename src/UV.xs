@@ -670,10 +670,7 @@ static void timer_cb(uv_timer_t* handle, int status) {
     XPUSHs(sv_status);
     PUTBACK;
 
-    printf("target handle: %x\n", handle);
-    printf("calling cb: %x\n", p5timer->cb);
     call_sv(p5timer->cb, G_SCALAR);
-    printf("mmmmm.....\n");
 
     SPAGAIN;
 
@@ -683,12 +680,7 @@ static void timer_cb(uv_timer_t* handle, int status) {
 }
 
 static void walk_cb(uv_handle_t* handle, void* arg) {
-    SV* sv_handle = SvREFCNT_inc(sv_handle_wrap_init(handle));
-
-    p5uv_handle_t* p5handle;
-    p5uv_stream_t* p5stream;
-    p5uv_udp_t* p5udp;
-    p5uv_poll_t* p5poll;
+    SV* sv_handle = SvREFCNT_inc(sv_handle_wrap(handle));
 
     dSP;
 
@@ -699,47 +691,6 @@ static void walk_cb(uv_handle_t* handle, void* arg) {
     XPUSHs(sv_handle);
     PUTBACK;
 
-    switch (handle->type) {
-        case UV_TCP:
-        case UV_TTY:
-        case UV_NAMED_PIPE:
-            /* stream */
-            p5stream = (p5uv_stream_t*)p5handle;
-            if (NULL != p5stream->read_cb)
-                SvREFCNT_inc(p5stream->read_cb);
-            if (NULL != p5stream->write_cb)
-                SvREFCNT_inc(p5stream->write_cb);
-            if (NULL != p5stream->connect_cb)
-                SvREFCNT_inc(p5stream->connect_cb);
-            if (NULL != p5stream->connection_cb)
-                SvREFCNT_inc(p5stream->connection_cb);
-            if (NULL != p5stream->shutdown_cb)
-                SvREFCNT_inc(p5stream->shutdown_cb);
-            break;
-
-        case UV_UDP:
-            p5udp = (p5uv_udp_t*)p5handle;
-            if (NULL != p5udp->send_cb)
-                SvREFCNT_inc(p5udp->send_cb);
-            if (NULL != p5udp->recv_cb)
-                SvREFCNT_inc(p5udp->recv_cb);
-            break;
-
-        case UV_POLL:
-        case UV_PREPARE:
-        case UV_CHECK:
-        case UV_IDLE:
-        case UV_ASYNC:
-        case UV_TIMER:
-            /* simple cb handles */
-            p5poll = (p5uv_poll_t*)p5handle;
-            if (NULL != p5poll->cb)
-                SvREFCNT_inc(p5poll->cb);
-            break;
-
-        default:
-            croak("unknown handle type: %d", handle->type);
-    }
     call_sv((SV*)arg, G_SCALAR);
 
     SPAGAIN;
@@ -949,17 +900,7 @@ void
 uv_walk(SV* cb)
 CODE:
 {
-    ngx_queue_t* q;
-    uv_handle_t* h;
-    uv_loop_t* loop;
-
-    loop = uv_default_loop();
-    uv_walk(loop, walk_cb, cb);
-
-    ngx_queue_foreach(q, &loop->handle_queue) {
-        h = ngx_queue_data(q, uv_handle_t, handle_queue);
-        printf("handle address: %x\n", h);
-    }
+    uv_walk(uv_default_loop(), walk_cb, cb);
 }
 
 void
@@ -1725,7 +1666,6 @@ CODE:
     if (p5timer->cb)
         SvREFCNT_dec(p5timer->cb);
     p5timer->cb = SvREFCNT_inc(cb);
-    printf("starting timer cb: %x\n", p5timer->cb);
 
     RETVAL = uv_timer_start(timer, timer_cb, (int64_t)timeout, (int64_t)repeat);
 }
