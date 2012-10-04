@@ -28,10 +28,6 @@ use UV;
 
     my $closer = UV::timer_init();
     UV::timer_start($closer, 80, 0, sub {
-        UV::close($checker);
-        UV::close($t1);
-        UV::close($t2);
-        UV::close($closer);
     });
 
     UV::run();
@@ -41,6 +37,11 @@ use UV;
     is $handle_list[1]->type, UV::TIMER;
     is $handle_list[2]->type, UV::TIMER;
     is $handle_list[3]->type, UV::TIMER;
+
+    UV::close($checker);
+    UV::close($t1);
+    UV::close($t2);
+    UV::close($closer);
 }
 
 done_testing;
