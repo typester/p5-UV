@@ -679,6 +679,29 @@ static void timer_cb(uv_timer_t* handle, int status) {
     LEAVE;
 }
 
+static void walk_cb(uv_handle_t* handle, void* arg) {
+    SV* sv_handle = SvREFCNT_inc(sv_handle_wrap(handle));
+
+    dSP;
+
+    ENTER;
+    SAVETMPS;
+
+    PUSHMARK(SP);
+    XPUSHs(sv_handle);
+    PUTBACK;
+
+    call_sv((SV*)arg, G_SCALAR);
+
+    SPAGAIN;
+
+    PUTBACK;
+    FREETMPS;
+    LEAVE;
+
+    SvREFCNT_dec(sv_handle);
+}
+
 static void getaddrinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo* res) {
     SV* sv_status;
     AV* av_res;
@@ -874,6 +897,13 @@ OUTPUT:
 
 int
 uv_is_active(uv_handle_t* handle)
+
+void
+uv_walk(SV* cb)
+CODE:
+{
+    uv_walk(uv_default_loop(), walk_cb, cb);
+}
 
 void
 uv_close(uv_handle_t* handle, SV* cb = NULL)
