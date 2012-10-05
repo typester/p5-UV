@@ -1,5 +1,11 @@
 Revision history for Perl extension UV
 
+0.2  2012-10-05T17:49:02+09:00
+     - added UV::loop namespace and UV::default_loop() to get default_loop,
+       it contains active_handles information.
+     - added uv_walk
+     - added deps/ to ignoring list for CPAN indexer
+
 0.12 2012-10-01T05:55:32+09:00
      - added CAUTION section in doc ;)
 

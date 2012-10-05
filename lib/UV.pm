@@ -2,7 +2,7 @@ package UV;
 use strict;
 use XSLoader;
 
-our $VERSION = '0.12';
+our $VERSION = '0.2';
 
 XSLoader::load __PACKAGE__, $VERSION;
 
@@ -95,6 +95,16 @@ But patches always welcome :)
 
 List of currently supported functions. Descriptions after function name are copied and pasted from uv.h
 
+=head2 my $loop = UV::default_loop()
+
+Get default loop handle. In p5-UV, this default_loop is only loop that is supported.
+Other functions that depends loop handle uses this default_loop implicitly.
+
+Currently this C<$loop> object contains only active_handles information.
+You can get active_handles count by doing following:
+
+    my $count = $loop->active_handles;
+
 =head2 UV::run()
 
 This function starts the event loop. It blocks until the reference count of the loop drops to zero. Always returns zero.
@@ -127,6 +137,10 @@ struct. The cb is called after shutdown is complete.
 
 Returns 1 if the prepare/check/idle/timer handle has been started, 0
 otherwise. For other handle types this always returns 1.
+
+=head2 UV::walk($walk_cb)
+
+Walk the list of open handles.
 
 =head2 UV::close($handle)
 
@@ -537,5 +551,7 @@ Call uv_freeaddrinfo() to free the addrinfo structure.
 =head1 AUTHOR
 
 Daisuke Murase <typester@cpan.org>
+
+TAGOMORI Satoshi
 
 =cut

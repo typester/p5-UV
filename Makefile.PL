@@ -3,7 +3,6 @@ use warnings;
 
 BEGIN {
     my @devmods = qw(
-        Module::Install::AuthorTests
         Module::Install::ReadmeFromPod
         Module::Install::Repository
         Module::Install::XSUtil
@@ -40,6 +39,10 @@ cc_include_paths 'deps/libuv/include';
 cc_warnings;
 
 test_requires 'Test::TCP';
+
+no_index directory => 'deps';
+
+auto_set_repository;
 
 if ($^O eq 'linux') {
     cc_libs 'm', 'rt', 'pthread';

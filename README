@@ -83,6 +83,16 @@ FUNCTIONS
     List of currently supported functions. Descriptions after function name
     are copied and pasted from uv.h
 
+  my $loop = UV::default_loop()
+    Get default loop handle. In p5-UV, this default_loop is only loop that
+    is supported. Other functions that depends loop handle uses this
+    default_loop implicitly.
+
+    Currently this $loop object contains only active_handles information.
+    You can get active_handles count by doing following:
+
+        my $count = $loop->active_handles;
+
   UV::run()
     This function starts the event loop. It blocks until the reference count
     of the loop drops to zero. Always returns zero.
@@ -109,6 +119,9 @@ FUNCTIONS
   UV::is_active($handle)
     Returns 1 if the prepare/check/idle/timer handle has been started, 0
     otherwise. For other handle types this always returns 1.
+
+  UV::walk($walk_cb)
+    Walk the list of open handles.
 
   UV::close($handle)
     Request handle to be closed. This MUST be called on each handle before
@@ -430,4 +443,6 @@ FUNCTIONS
 
 AUTHOR
     Daisuke Murase <typester@cpan.org>
+
+    TAGOMORI Satoshi
 
