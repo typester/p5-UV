@@ -2,7 +2,7 @@ package UV;
 use strict;
 use XSLoader;
 
-our $VERSION = '0.2';
+our $VERSION = '0.21';
 
 XSLoader::load __PACKAGE__, $VERSION;
 

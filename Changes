@@ -1,5 +1,8 @@
 Revision history for Perl extension UV
 
+0.21 2012-10-10T08:25:36+09:00
+     - added a Makefile.PL treak avoiding segmentation fault. (ref RT #115206)
+
 0.2  2012-10-05T17:49:02+09:00
      - added UV::loop namespace and UV::default_loop() to get default_loop,
        it contains active_handles information.

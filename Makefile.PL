@@ -10,6 +10,7 @@ BEGIN {
     my @not_available;
 
     {
+        $|=1; # ref RT #115206
         local *STDOUT;
         eval qq{use inc::Module::Install; 1;} or push @not_available, 'inc::Module::Install';
     }
