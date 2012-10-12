@@ -68,6 +68,26 @@ else {
     die "$^O is unsupported at this point\n";
 }
 
+unless ($^O eq 'MSWin32') {
+    cc_append_to_ccflags '-fPIC';
+
+    # XXX
+    use File::Spec;
+    my $mk_file = File::Spec->catfile('deps', 'libuv', 'config-unix.mk');
+
+    open my $fh, '<', $mk_file or die $!;
+    my $mk = do { local $/; <$fh> };
+    close $fh;
+
+    unless ($mk =~ /-g -fPIC/) {
+        $mk =~ s/-g/-g -fPIC/;
+
+        open $fh, '>', $mk_file or die $!;
+        print $fh $mk;
+        close $fh;
+    }
+}
+
 makemaker_args->{MYEXTLIB} = 'deps/libuv/uv$(LIB_EXT)';
 
 {
