@@ -1,5 +1,8 @@
 Revision history for Perl extension UV
 
+0.22 2012-10-12T14:18:36+09:00
+     - added a dirty (hopefully temporary) hack to make libuv with -fPIC.
+
 0.21 2012-10-10T08:25:36+09:00
      - added a Makefile.PL treak avoiding segmentation fault. (ref RT #115206)
 
