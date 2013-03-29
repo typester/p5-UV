@@ -830,6 +830,13 @@ CODE:
 OUTPUT:
     RETVAL
 
+void
+uv_stop()
+CODE:
+{
+    uv_stop(uv_default_loop());
+}
+
 int
 uv_last_error()
 CODE:
