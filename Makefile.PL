@@ -88,7 +88,7 @@ unless ($^O eq 'MSWin32') {
     }
 }
 
-makemaker_args->{MYEXTLIB} = 'deps/libuv/uv$(LIB_EXT)';
+makemaker_args->{MYEXTLIB} = 'deps/libuv/libuv$(LIB_EXT)';
 
 {
     package MY;
