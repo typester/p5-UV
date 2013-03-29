@@ -24,3 +24,4 @@
 ^src/UV\.c$
 ^deps/libuv/run-tests
 \.buildstamp$
+^deps/libuv/libuv\.a$

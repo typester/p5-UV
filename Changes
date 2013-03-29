@@ -1,5 +1,8 @@
 Revision history for Perl extension UV
 
+0.24 2013-03-29T17:00:00+09:00
+     - fixed a packaging issue
+
 0.23 2013-03-29T15:21:00+09:00
      - libuv updated to 0.10.2 (first officially versioned release of libuv)
      - supported following new functions:
