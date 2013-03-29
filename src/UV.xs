@@ -796,6 +796,12 @@ BOOT:
     newCONSTSUB(stash, "WRITABLE", newSViv(UV_WRITABLE));
 }
 
+unsigned int
+uv_version()
+
+const char*
+uv_version_string()
+
 void
 uv_default_loop()
 CODE:
@@ -823,18 +829,6 @@ CODE:
 }
 OUTPUT:
     RETVAL
-
-void
-uv_version()
-CODE:
-{
-    SV* sv;
-
-    sv = sv_2mortal(newSV(0));
-    sv_setpvf(sv, "%d.%d", UV_VERSION_MAJOR, UV_VERSION_MINOR);
-
-    ST(0) = sv;
-}
 
 int
 uv_last_error()
