@@ -837,6 +837,16 @@ CODE:
     uv_stop(uv_default_loop());
 }
 
+NV
+uv_now()
+CODE:
+{
+    /* what's the proper way to return a int64_t? */
+    RETVAL = (NV) uv_now(uv_default_loop());
+}
+OUTPUT:
+    RETVAL
+
 int
 uv_last_error()
 CODE:
@@ -919,16 +929,6 @@ CODE:
 
     uv_close(handle, close_cb);
 }
-
-NV
-uv_now()
-CODE:
-{
-    /* what's the proper way to return a int64_t? */
-    RETVAL = (NV) uv_now(uv_default_loop());
-}
-OUTPUT:
-    RETVAL
 
 int
 uv_listen(uv_stream_t* stream, int backlog, SV* cb)
