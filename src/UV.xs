@@ -1065,6 +1065,9 @@ CODE:
 }
 
 int
+uv_tcp_open(uv_tcp_t* tcp, int sock)
+
+int
 uv_tcp_nodelay(uv_tcp_t* tcp, int enable = 1)
 
 int
