@@ -22,3 +22,5 @@
 ^MYMETA\.
 \.o$
 ^src/UV\.c$
+^deps/libuv/run-tests
+\.buildstamp$

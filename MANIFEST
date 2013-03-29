@@ -20,13 +20,8 @@ deps/libuv/include/uv.h
 deps/libuv/LICENSE
 deps/libuv/Makefile
 deps/libuv/README.md
-deps/libuv/run-tests
-deps/libuv/run-tests.dSYM/Contents/Info.plist
-deps/libuv/run-tests.dSYM/Contents/Resources/DWARF/run-tests
-deps/libuv/src/.buildstamp
 deps/libuv/src/fs-poll.c
 deps/libuv/src/inet.c
-deps/libuv/src/unix/.buildstamp
 deps/libuv/src/unix/aix.c
 deps/libuv/src/unix/async.c
 deps/libuv/src/unix/core.c
@@ -97,7 +92,6 @@ deps/libuv/src/win/winapi.c
 deps/libuv/src/win/winapi.h
 deps/libuv/src/win/winsock.c
 deps/libuv/src/win/winsock.h
-deps/libuv/test/.buildstamp
 deps/libuv/test/benchmark-async-pummel.c
 deps/libuv/test/benchmark-async.c
 deps/libuv/test/benchmark-fs-stat.c
