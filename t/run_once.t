@@ -11,7 +11,7 @@ UV::idle_start($idle, sub {
     $counter++;
 });
 for my $i (1..10) {
-    UV::run_once;
+    UV::run(UV::RUN_ONCE);
     is $counter, $i, "counter increments as expected";
 }
 

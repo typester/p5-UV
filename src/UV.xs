@@ -105,10 +105,10 @@ struct p5uv_timer_s {
 #undef P5UV_HANDLE_FIELDS
 #undef P5UV_STREAM_FIELDS
 
-static p5uv_handle_t* p5uv_handle_init(uv_handle_t* uv_handle) {
+static p5uv_handle_t* p5uv_handle_init(uv_handle_t* uv_handle, uv_handle_type type) {
     p5uv_handle_t* p5uv_handle;
 
-    switch (uv_handle->type) {
+    switch (type) {
         case UV_TCP:
             p5uv_handle = (p5uv_handle_t*)calloc(1, sizeof(p5uv_tcp_t));
             break;
@@ -165,8 +165,8 @@ static SV* sv_handle_wrap(uv_handle_t* uv_handle) {
     return sv;
 }
 
-static SV* sv_handle_wrap_init(uv_handle_t* uv_handle) {
-    uv_handle->data = (void*)p5uv_handle_init(uv_handle);
+static SV* sv_handle_wrap_init(uv_handle_t* uv_handle, uv_handle_type type) {
+    uv_handle->data = (void*)p5uv_handle_init(uv_handle, type);
     return sv_handle_wrap(uv_handle);
 }
 
@@ -777,6 +777,11 @@ BOOT:
     /* req type */
     UV_REQ_TYPE_MAP(UV_CONST_GEN);
 
+    /* run mode */
+    newCONSTSUB(stash, "RUN_DEFAULT", newSViv(UV_RUN_DEFAULT));
+    newCONSTSUB(stash, "RUN_ONCE", newSViv(UV_RUN_ONCE));
+    newCONSTSUB(stash, "RUN_NOWAIT", newSViv(UV_RUN_NOWAIT));
+
     /* udp */
     newCONSTSUB(stash, "UDP_IPV6ONLY", newSViv(UV_UDP_IPV6ONLY));
     newCONSTSUB(stash, "UDP_PARTIAL", newSViv(UV_UDP_PARTIAL));
@@ -810,19 +815,10 @@ CODE:
 }
 
 int
-uv_run()
+uv_run(int mode = UV_RUN_DEFAULT)
 CODE:
 {
-    RETVAL = uv_run(uv_default_loop());
-}
-OUTPUT:
-    RETVAL
-
-int
-uv_run_once()
-CODE:
-{
-    RETVAL = uv_run_once(uv_default_loop());
+    RETVAL = uv_run(uv_default_loop(), mode);
 }
 OUTPUT:
     RETVAL
@@ -1062,7 +1058,7 @@ CODE:
         croak("cannot initialize tcp handle");
     }
 
-    ST(0) = sv_handle_wrap_init((uv_handle_t*)tcp);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)tcp, UV_TCP);
     XSRETURN(1);
 }
 
@@ -1227,7 +1223,7 @@ CODE:
         croak("cannot initialize udp handle");
     }
 
-    ST(0) = sv_handle_wrap_init((uv_handle_t*)udp);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)udp, UV_UDP);
     XSRETURN(1);
 }
 
@@ -1395,7 +1391,7 @@ CODE:
         croak("cannot initialize tty handle");
     }
 
-    ST(0) = sv_handle_wrap_init((uv_handle_t*)tty);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)tty, UV_TTY);
     XSRETURN(1);
 }
 
@@ -1439,7 +1435,7 @@ CODE:
         croak("cannot initialize poll handle");
     }
 
-    ST(0) = sv_handle_wrap_init((uv_handle_t*)poll);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)poll, UV_POLL);
     XSRETURN(1);
 }
 
@@ -1478,7 +1474,7 @@ CODE:
         croak("cannot initialize pipe handle");
     }
 
-    ST(0) = sv_handle_wrap_init((uv_handle_t*)pipe);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)pipe, UV_NAMED_PIPE);
     XSRETURN(1);
 }
 
@@ -1518,7 +1514,7 @@ CODE:
         croak("cannot initialize prepare handle");
     }
 
-    ST(0) = sv_handle_wrap_init((uv_handle_t*)prepare);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)prepare, UV_PREPARE);
     XSRETURN(1);
 }
 
@@ -1554,7 +1550,7 @@ CODE:
         croak("cannot initialize check handle");
     }
 
-    ST(0) = sv_handle_wrap_init((uv_handle_t*)check);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)check, UV_CHECK);
     XSRETURN(1);
 }
 
@@ -1590,7 +1586,7 @@ CODE:
         croak("cannot initialize idle handle");
     }
 
-    ST(0) = sv_handle_wrap_init((uv_handle_t*)idle);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)idle, UV_IDLE);
     XSRETURN(1);
 }
 
@@ -1628,7 +1624,7 @@ CODE:
         croak("cannot initialize async handle");
     }
 
-    sv_async = sv_handle_wrap_init((uv_handle_t*)async);
+    sv_async = sv_handle_wrap_init((uv_handle_t*)async, UV_ASYNC);
 
     p5async = (p5uv_async_t*)async->data;
     p5async->cb = SvREFCNT_inc(cb);
@@ -1654,7 +1650,7 @@ CODE:
         croak("cannot initialize timer handle");
     }
 
-    ST(0) = sv_handle_wrap_init((uv_handle_t*)timer);
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)timer, UV_TIMER);
     XSRETURN(1);
 }
 
