@@ -7,8 +7,6 @@ use UV;
 my $version     = UV::version;
 my $version_str = UV::version_string;
 
-warn $version_str;
-
 my $major = $version >> 16 & 0xf;
 my $minor = $version >> 8 & 0xf;
 my $patch = $version & 0xf;
