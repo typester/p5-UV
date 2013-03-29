@@ -1429,42 +1429,6 @@ CODE:
     XSRETURN(2);
 }
 
-void
-uv_poll_init(int fd)
-CODE:
-{
-    uv_poll_t* poll;
-    int r;
-
-    Newx(poll, 1, uv_poll_t);
-
-    r = uv_poll_init(uv_default_loop(), poll, fd);
-    if (r) {
-        croak("cannot initialize poll handle");
-    }
-
-    ST(0) = sv_handle_wrap_init((uv_handle_t*)poll, UV_POLL);
-    XSRETURN(1);
-}
-
-int
-uv_poll_start(uv_poll_t* handle, int events, SV* cb)
-CODE:
-{
-    p5uv_poll_t* p5poll = (p5uv_poll_t*)handle->data;
-
-    if (p5poll->cb)
-        SvREFCNT_dec(p5poll->cb);
-    p5poll->cb = SvREFCNT_inc(cb);
-
-    RETVAL = uv_poll_start(handle, events, poll_cb);
-}
-OUTPUT:
-    RETVAL
-
-int
-uv_poll_stop(uv_poll_t* handle)
-
 int
 uv_guess_handle(int fd)
 
@@ -1507,6 +1471,42 @@ CODE:
 
     uv_pipe_connect(req, pipe, name, connect_cb);
 }
+
+void
+uv_poll_init(int fd)
+CODE:
+{
+    uv_poll_t* poll;
+    int r;
+
+    Newx(poll, 1, uv_poll_t);
+
+    r = uv_poll_init(uv_default_loop(), poll, fd);
+    if (r) {
+        croak("cannot initialize poll handle");
+    }
+
+    ST(0) = sv_handle_wrap_init((uv_handle_t*)poll, UV_POLL);
+    XSRETURN(1);
+}
+
+int
+uv_poll_start(uv_poll_t* handle, int events, SV* cb)
+CODE:
+{
+    p5uv_poll_t* p5poll = (p5uv_poll_t*)handle->data;
+
+    if (p5poll->cb)
+        SvREFCNT_dec(p5poll->cb);
+    p5poll->cb = SvREFCNT_inc(cb);
+
+    RETVAL = uv_poll_start(handle, events, poll_cb);
+}
+OUTPUT:
+    RETVAL
+
+int
+uv_poll_stop(uv_poll_t* handle)
 
 void
 uv_prepare_init()
