@@ -1735,6 +1735,51 @@ CODE:
 OUTPUT:
     RETVAL
 
+void
+uv_interface_addresses()
+CODE:
+{
+    uv_interface_address_t* addresses;
+    int count;
+    uv_err_t err;
+    int i, r;
+    HV* hv;
+    AV* av;
+    SV** s;
+    char buf[512];
+
+    err = uv_interface_addresses(&addresses, &count);
+
+    if (0 == err.code) {
+        av = (AV*)sv_2mortal((SV*)newAV());
+
+        for (i = 0; i < count; i++) {
+            hv = (HV*)sv_2mortal((SV*)newHV());
+
+            s = hv_store(hv, "is_internal", 11, newSViv(addresses[i].is_internal), 0);
+
+            s = hv_store(hv, "name", 4, newSVpv(addresses[i].name, 0), 0);
+
+            r = uv_ip4_name(&addresses[i].address.address4, buf, 512);
+            assert(0 == r);
+            s = hv_store(hv, "address4", 8, newSVpv(buf, 0), 0);
+
+            r = uv_ip6_name(&addresses[i].address.address6, buf, 512);
+            assert(0 == r);
+            s = hv_store(hv, "address6", 8, newSVpv(buf, 0), 0);
+
+            av_push(av, newRV_inc((SV*)hv));
+        }
+
+        uv_free_interface_addresses(addresses, count);
+
+        ST(0) = sv_2mortal(newRV_inc((SV*)av));
+        XSRETURN(1);
+    }
+
+    XSRETURN(0);
+}
+
 MODULE=UV PACKAGE=UV::loop
 
 unsigned int
