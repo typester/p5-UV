@@ -773,6 +773,7 @@ BOOT:
 
     /* handle type */
     UV_HANDLE_TYPE_MAP(UV_CONST_GEN);
+    newCONSTSUB(stash, "FILE", newSViv(UV_FILE));
 
     /* req type */
     UV_REQ_TYPE_MAP(UV_CONST_GEN);
