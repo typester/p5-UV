@@ -1233,6 +1233,9 @@ CODE:
 }
 
 int
+uv_udp_open(uv_udp_t* udp, int sock)
+
+int
 uv_udp_bind(uv_udp_t* udp, const char* ip, int port, int flags = 0)
 CODE:
 {
