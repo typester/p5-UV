@@ -46,7 +46,7 @@ no_index directory => 'deps';
 auto_set_repository;
 
 if ($^O eq 'linux') {
-    cc_libs 'm', 'rt', 'pthread';
+    cc_libs 'm', 'dl', 'rt', 'pthread';
 }
 elsif ($^O eq 'darwin') {
     cc_libs 'm', 'pthread';
@@ -55,10 +55,10 @@ elsif ($^O eq 'darwin') {
     }
 }
 elsif ($^O =~ /^(gnuk)?freebsd$/ || $^O eq 'netbsd' || $^O eq 'openbsd') {
-    cc_libs 'm', 'pthread';
+    cc_libs 'm', 'kvm', 'pthread';
 }
 elsif ($^O eq 'sunos' || $^O eq 'solaris') {
-    cc_libs 'm', 'socket', 'nsl', 'kstat', 'pthreads';
+    cc_libs 'm', 'kstat', 'nsl', 'sendfile', 'socket', 'pthreads';
 }
 elsif ($^O eq 'MSWin32') {
     cc_append_to_ccflags '-D_WIN32_WINNT=0x600'; # https://github.com/joyent/libuv/issues/263
