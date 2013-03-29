@@ -19,3 +19,6 @@
 ^deps/libuv/\.
 ^test\.pl$
 ^*.bs$
+^MYMETA\.
+\.o$
+^src/UV\.c$
