@@ -7,9 +7,9 @@ use UV;
 my $version     = UV::version;
 my $version_str = UV::version_string;
 
-my $major = $version >> 16 & 0xf;
-my $minor = $version >> 8 & 0xf;
-my $patch = $version & 0xf;
+my $major = $version >> 16 & 0xff;
+my $minor = $version >> 8 & 0xff;
+my $patch = $version & 0xff;
 
 my ($v1, $v2, $v3) = split /\./, $version_str;
 
