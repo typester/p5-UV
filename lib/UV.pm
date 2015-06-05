@@ -105,16 +105,38 @@ You can get active_handles count by doing following:
 
     my $count = $loop->active_handles;
 
-=head2 UV::run()
+=head2 UV::run($mode)
 
-This function starts the event loop. It blocks until the reference count of the loop drops to zero. Always returns zero.
+This function runs the event loop. It will act differently depending on the
+specified mode:
 
-=head2 UV::run_once()
+=over
 
-Poll for new events once. Note that this function blocks if there are no
-pending events. Returns zero when done (no active handles or requests left),
-or non-zero if more events are expected (meaning you should call
-uv_run_once() again sometime in the future).
+=item *
+
+UV_RUN_DEFAULT: Runs the event loop until the reference count drops to
+zero. Always returns zero.
+
+=item *
+
+UV_RUN_ONCE: Poll for new events once. Note that this function blocks if
+there are no pending events. Returns zero when done (no active handles
+or requests left), or non-zero if more events are expected (meaning you
+should run the event loop again sometime in the future).
+
+=item *
+
+UV_RUN_NOWAIT: Poll for new events once but don't block if there are no
+pending events.
+
+=back
+
+=head2 UV::stop()
+
+This function will stop the event loop by forcing uv_run to end
+as soon as possible, but not sooner than the next loop iteration.
+If this function was called before blocking for i/o, the loop won't
+block for i/o on this iteration.
 
 =head2 my $err = UV::last_error()
 
