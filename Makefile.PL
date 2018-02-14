@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use lib '.';
 
 BEGIN {
     my @devmods = qw(
